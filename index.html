@@ -243,6 +243,16 @@
             background: var(--bg-hover);
         }
 
+        .shortcut-item.highlight {
+            background: var(--accent);
+            animation: pulse 0.5s ease-in-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+
         .keys {
             font-family: var(--font-mono);
             font-size: 12px;
@@ -272,12 +282,12 @@
 
         /* Empty State */
         .empty-state {
-            flex: 1;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             color: var(--text-secondary);
+            padding: 40px;
         }
 
         .empty-state .icon {
@@ -454,6 +464,16 @@
                         <option value="">全部分类</option>
                     </select>
                 </div>
+                <div class="key-hint" id="keyHint" style="
+                    margin-top: 8px;
+                    font-size: 11px;
+                    color: var(--text-secondary);
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                ">
+                    <span id="keyHintText">💡 直接按下快捷键可跳转到对应记录</span>
+                </div>
             </div>
 
             <div class="shortcut-list" id="shortcutList">
@@ -563,6 +583,10 @@
         let customShortcuts = {};
         let activeItem = null;
 
+        // 当前按下的键
+        let pressedKeys = [];
+        let keyTimeout = null;
+
         // 初始化
         function init() {
             utools.onPluginEnter(({ code, type, payload }) => {
@@ -574,6 +598,132 @@
             populateSoftwareList();
             setupEventListeners();
             loadCustomShortcuts();
+            setupKeyDetector();
+
+            // 自动选中第一个软件
+            const firstItem = document.querySelector('.software-item');
+            if (firstItem) {
+                selectSoftware(firstItem.dataset.value);
+            } else {
+                showEmpty('选择软件查看快捷键', '或点击上方「导入快捷键」添加自定义数据');
+            }
+        }
+
+        // 设置按键检测器
+        function setupKeyDetector() {
+            document.addEventListener('keydown', (e) => {
+                // 如果焦点在输入框或下拉框，不拦截
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') {
+                    return;
+                }
+
+                e.preventDefault();
+
+                const key = getKeyName(e);
+                if (!key) return;
+
+                // 清除之前的超时
+                if (keyTimeout) clearTimeout(keyTimeout);
+
+                pressedKeys.push(key);
+
+                // 500ms 后重置按键组合
+                keyTimeout = setTimeout(() => {
+                    if (pressedKeys.length > 0) {
+                        matchKeys(pressedKeys);
+                    }
+                    pressedKeys = [];
+                }, 500);
+            });
+        }
+
+        // 获取按键名称
+        function getKeyName(e) {
+            const key = e.key;
+            const code = e.code;
+
+            // 修饰键
+            if (key === 'Control') return 'Ctrl';
+            if (key === 'Alt') return 'Alt';
+            if (key === 'Shift') return 'Shift';
+            if (key === 'Meta') return 'Meta';
+
+            // 功能键
+            if (code === 'Space') return 'Space';
+            if (code === 'Enter') return 'Enter';
+            if (code === 'Escape') return 'Esc';
+            if (code === 'Backspace') return 'Backspace';
+            if (code === 'Tab') return 'Tab';
+
+            // 方向键
+            if (code === 'ArrowUp') return 'Up';
+            if (code === 'ArrowDown') return 'Down';
+            if (code === 'ArrowLeft') return 'Left';
+            if (code === 'ArrowRight') return 'Right';
+
+            // 其他可打印键
+            if (key.length === 1) {
+                return key.toUpperCase();
+            }
+
+            // F1-F12 等
+            if (key.startsWith('F') && !key.includes(' ')) {
+                return key;
+            }
+
+            return null;
+        }
+
+        // 匹配按键组合
+        function matchKeys(keys) {
+            if (!currentShortcuts || currentShortcuts.length === 0) return;
+
+            const keyStr = keys.join('+').toLowerCase();
+
+            const match = currentShortcuts.find(s => {
+                const shortcutKeys = s.keys.map(k => k.toLowerCase()).join('+');
+                return shortcutKeys === keyStr;
+            });
+
+            if (match) {
+                // 滚动到对应的 item 并高亮
+                scrollToShortcut(match);
+                // 更新提示文字
+                document.getElementById('keyHintText').textContent = `✅ ${match.keys.join('+')} → ${match.command}`;
+                setTimeout(() => {
+                    document.getElementById('keyHintText').textContent = '💡 直接按下快捷键可跳转到对应记录';
+                }, 2000);
+            } else {
+                document.getElementById('keyHintText').textContent = `❌ 未找到: ${keys.join('+')}`;
+                setTimeout(() => {
+                    document.getElementById('keyHintText').textContent = '💡 直接按下快捷键可跳转到对应记录';
+                }, 2000);
+            }
+        }
+
+        // 滚动到并高亮快捷键
+        function scrollToShortcut(target) {
+            // 移除之前的高亮
+            document.querySelectorAll('.shortcut-item.highlight').forEach(el => {
+                el.classList.remove('highlight');
+            });
+
+            // 查找对应的元素
+            const items = document.querySelectorAll('.shortcut-item');
+            for (const item of items) {
+                const keysEl = item.querySelector('.keys');
+                const commandEl = item.querySelector('.command');
+                if (keysEl && commandEl) {
+                    const keysText = keysEl.textContent.toLowerCase();
+                    const commandText = commandEl.textContent;
+                    if (keysText === target.keys.join('+').toLowerCase() &&
+                        commandText === target.command) {
+                        item.classList.add('highlight');
+                        item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        break;
+                    }
+                }
+            }
         }
 
         // 填充软件列表
@@ -644,15 +794,22 @@
 
         // 筛选快捷键
         function filterShortcuts(keyword, category) {
+            // 空关键词显示全部，有关键词时搜索中英文
             let filtered = currentShortcuts;
 
-            if (keyword) {
-                keyword = keyword.toLowerCase();
-                filtered = filtered.filter(s =>
-                    s.command.toLowerCase().includes(keyword) ||
-                    (s.description && s.description.toLowerCase().includes(keyword)) ||
-                    s.keys.join('+').toLowerCase().includes(keyword)
-                );
+            if (keyword && keyword.trim()) {
+                keyword = keyword.toLowerCase().trim();
+                filtered = filtered.filter(s => {
+                    // 匹配 command（英文名）
+                    const commandMatch = s.command.toLowerCase().includes(keyword);
+                    // 匹配 description（中文描述）
+                    const descMatch = s.description && s.description.toLowerCase().includes(keyword);
+                    // 匹配 keys（按键组合）
+                    const keysMatch = s.keys.join('+').toLowerCase().includes(keyword);
+                    // 匹配 category（分类名）
+                    const catMatch = s.category.toLowerCase().includes(keyword);
+                    return commandMatch || descMatch || keysMatch || catMatch;
+                });
             }
 
             if (category) {
@@ -665,17 +822,19 @@
         // 渲染快捷键列表
         function renderShortcuts(shortcuts) {
             const container = document.getElementById('shortcutList');
-            const emptyState = document.getElementById('emptyState');
 
             if (shortcuts.length === 0) {
-                container.innerHTML = '';
-                emptyState.classList.remove('hidden');
-                emptyState.querySelector('.title').textContent = '没有找到匹配的快捷键';
-                emptyState.querySelector('.desc').textContent = '尝试其他关键词或分类';
+                // 创建空状态元素
+                const emptyHtml = `
+                    <div class="empty-state" style="display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); padding: 40px;">
+                        <div class="icon" style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;">⌨️</div>
+                        <div class="title" style="font-size: 16px; margin-bottom: 8px;">没有找到匹配的快捷键</div>
+                        <div class="desc" style="font-size: 13px;">尝试其他关键词或分类</div>
+                    </div>
+                `;
+                container.innerHTML = emptyHtml;
                 return;
             }
-
-            emptyState.classList.add('hidden');
 
             // 按分类分组
             const grouped = {};
@@ -706,12 +865,13 @@
         // 显示空状态
         function showEmpty(title, desc) {
             const container = document.getElementById('shortcutList');
-            const emptyState = document.getElementById('emptyState');
-            emptyState.classList.remove('hidden');
-            emptyState.querySelector('.title').textContent = title || '选择软件查看快捷键';
-            emptyState.querySelector('.desc').textContent = desc || '或点击上方「导入快捷键」添加自定义数据';
-            container.innerHTML = '';
-            container.appendChild(emptyState);
+            container.innerHTML = `
+                <div class="empty-state" style="display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); padding: 40px;">
+                    <div class="icon" style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;">⌨️</div>
+                    <div class="title" style="font-size: 16px; margin-bottom: 8px;">${title || '选择软件查看快捷键'}</div>
+                    <div class="desc" style="font-size: 13px;">${desc || '或点击上方「导入快捷键」添加自定义数据'}</div>
+                </div>
+            `;
         }
 
         // 加载自定义快捷键
