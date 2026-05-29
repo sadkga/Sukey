@@ -736,6 +736,31 @@
                     <input type="file" id="fileInput" accept=".json" style="display:none">
                     <span class="import-btn">选择文件</span>
                 </div>
+                <div style="text-align: center; color: var(--text-secondary); font-size: 12px; margin: 12px 0;">或</div>
+                <textarea id="pasteInput" placeholder="直接粘贴 JSON 内容到此处..." style="
+                    width: 100%;
+                    height: 80px;
+                    background: var(--bg-dark);
+                    border: 1px solid var(--border);
+                    border-radius: 4px;
+                    color: var(--text-primary);
+                    font-family: var(--font-mono);
+                    font-size: 11px;
+                    padding: 8px;
+                    resize: none;
+                    box-sizing: border-box;
+                "></textarea>
+                <button id="pasteImportBtn" style="
+                    width: 100%;
+                    margin-top: 8px;
+                    padding: 8px;
+                    background: var(--bg-hover);
+                    border: 1px solid var(--border);
+                    border-radius: 4px;
+                    color: var(--text-primary);
+                    font-size: 12px;
+                    cursor: pointer;
+                ">导入粘贴内容</button>
                 <div class="import-format">
                     <strong>格式要求：</strong><br><br>
                     {<br>
@@ -778,26 +803,6 @@
                     <label>软件名称</label>
                     <input type="text" id="newSoftwareName" placeholder="如：Photoshop">
                 </div>
-                <div class="form-row">
-                    <div class="form-field">
-                        <label>快捷键</label>
-                        <input type="text" id="newShortcutKeys" placeholder="如：Ctrl+Shift+P">
-                    </div>
-                    <div class="form-field">
-                        <label>命令</label>
-                        <input type="text" id="newShortcutCmd" placeholder="如：新建文档">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-field">
-                        <label>分类</label>
-                        <input type="text" id="newShortcutCat" placeholder="如：文件" value="常用">
-                    </div>
-                    <div class="form-field">
-                        <label>描述</label>
-                        <input type="text" id="newShortcutDesc" placeholder="如：新建文档">
-                    </div>
-                </div>
             </div>
             <div class="float-dialog-footer">
                 <button class="btn-cancel" id="addSoftwareDialogCancel">取消</button>
@@ -816,7 +821,23 @@
             <div class="float-dialog-body">
                 <div class="form-field">
                     <label>快捷键</label>
-                    <input type="text" id="editKeys" placeholder="如：Ctrl+Shift+P">
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="text" id="editKeys" placeholder="按下录制按钮后按键" style="flex: 1; background: var(--bg-dark); color: var(--text-primary);">
+                        <button id="recordKeyBtn" type="button" style="
+                            display: flex;
+                            align-items: center;
+                            gap: 6px;
+                            padding: 8px 12px;
+                            background: transparent;
+                            border: 1px solid var(--border);
+                            border-radius: 4px;
+                            color: var(--text-primary);
+                            font-size: 12px;
+                            cursor: pointer;
+                        ">
+                            <span id="recordIcon" style="color: var(--accent);">▶</span><span id="recordText">录制</span>
+                        </button>
+                    </div>
                 </div>
                 <div class="form-field">
                     <label>命令</label>
@@ -911,6 +932,7 @@
         let currentShortcuts = [];
         let customShortcuts = {};
         let activeItem = null;
+        let isRecording = false;  // 录制模式标志
 
         // 当前按下的键组合
         let currentCombo = [];
@@ -945,7 +967,20 @@
 
             const handleKeyDown = (e) => {
                 // 跳过输入框中的按键（让输入框正常工作）
-                if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') {
+                    return;
+                }
+
+                // 录制模式时不处理全局按键（避免触发搜索）
+                if (isRecording) {
+                    return;
+                }
+
+                // 如果有对话框打开（导入、添加软件等），不处理全局按键
+                if (!document.getElementById('importOverlay').classList.contains('hidden')) {
+                    return;
+                }
+                if (document.querySelector('.float-dialog.show')) {
                     return;
                 }
 
@@ -1393,6 +1428,7 @@
 
         // 显示编辑对话框
         function showEditDialog(softwareKey, shortcutIndex, shortcut) {
+            stopRecording();
             const dialog = document.getElementById('editDialog');
             document.getElementById('editKeys').value = shortcut.keys.join('+');
             document.getElementById('editCommand').value = shortcut.command;
@@ -1479,6 +1515,27 @@
                 fileInput.click();
             });
 
+            // 粘贴导入
+            document.getElementById('pasteImportBtn').addEventListener('click', () => {
+                const text = document.getElementById('pasteInput').value.trim();
+                if (!text) {
+                    alert('请先粘贴 JSON 内容');
+                    return;
+                }
+                try {
+                    const data = JSON.parse(text);
+                    if (data.software && data.shortcuts && Array.isArray(data.shortcuts)) {
+                        importShortcuts(data);
+                        document.getElementById('importOverlay').classList.add('hidden');
+                        document.getElementById('pasteInput').value = '';
+                    } else {
+                        alert('JSON 格式不正确');
+                    }
+                } catch (err) {
+                    alert('JSON 解析失败');
+                }
+            });
+
             // 添加软件按钮
             document.getElementById('addSoftwareBtn').addEventListener('click', () => {
                 document.getElementById('addSoftwareDialog').classList.add('show');
@@ -1496,40 +1553,24 @@
             // 提交添加软件
             document.getElementById('submitAddSoftware').addEventListener('click', () => {
                 const name = document.getElementById('newSoftwareName').value.trim();
-                const keysStr = document.getElementById('newShortcutKeys').value.trim();
-                const cmd = document.getElementById('newShortcutCmd').value.trim();
-                const cat = document.getElementById('newShortcutCat').value.trim() || '常用';
-                const desc = document.getElementById('newShortcutDesc').value.trim();
 
-                if (!name || !keysStr || !cmd) {
-                    alert('请填写软件名称、快捷键和命令');
+                if (!name) {
+                    alert('请填写软件名称');
                     return;
                 }
 
                 const key = name.toLowerCase().replace(/\s+/g, '_');
-                const shortcut = {
-                    keys: keysStr.split('+').map(k => k.trim()),
-                    command: cmd,
-                    category: cat,
-                    description: desc
-                };
 
                 if (!customShortcuts[key]) {
                     customShortcuts[key] = { name: name, shortcuts: [] };
+                    saveShortcutToDb(key, customShortcuts[key]);
                 }
-                customShortcuts[key].shortcuts.push(shortcut);
 
-                saveShortcutToDb(key, customShortcuts[key]).then(() => {
-                    populateSoftwareList();
-                    selectSoftware(`custom_${key}`);
-                    // 清空并关闭对话框
-                    document.getElementById('newSoftwareName').value = '';
-                    document.getElementById('newShortcutKeys').value = '';
-                    document.getElementById('newShortcutCmd').value = '';
-                    document.getElementById('newShortcutDesc').value = '';
-                    document.getElementById('newShortcutCat').value = '常用';
-                    document.getElementById('addSoftwareDialog').classList.remove('show');
-                });
+                populateSoftwareList();
+                selectSoftware(`custom_${key}`);
+                // 清空并关闭对话框
+                document.getElementById('newSoftwareName').value = '';
+                document.getElementById('addSoftwareDialog').classList.remove('show');
             });
 
             // 删除对话框 - 确认
@@ -1558,10 +1599,102 @@
 
             // 编辑对话框事件
             document.getElementById('editDialogClose').addEventListener('click', () => {
+                stopRecording();
                 document.getElementById('editDialog').classList.remove('show');
             });
             document.getElementById('editDialogCancel').addEventListener('click', () => {
+                stopRecording();
                 document.getElementById('editDialog').classList.remove('show');
+            });
+
+            // 录制快捷键按钮
+            let recordedKeys = [];
+
+            function normalizeKey(key) {
+                const map = {
+                    'Control': 'Ctrl',
+                    'Alt': 'Alt',
+                    'Shift': 'Shift',
+                    'Meta': 'Meta',
+                    ' ': 'Space'
+                };
+                if (map[key]) return map[key];
+                if (key.length === 1) return key.toUpperCase();
+                if (key.startsWith('F') && key.length <= 4) return key;
+                return key;
+            }
+
+            function startRecording() {
+                isRecording = true;
+                recordedKeys = [];
+                const btn = document.getElementById('recordKeyBtn');
+                const icon = document.getElementById('recordIcon');
+                icon.textContent = '⏸';
+                icon.style.color = '#fff';
+                document.getElementById('recordText').style.color = '#fff';
+                btn.style.background = 'var(--accent)';
+                const input = document.getElementById('editKeys');
+                input.value = '';
+                input.placeholder = '按下按键...';
+            }
+
+            function stopRecording() {
+                isRecording = false;
+                const btn = document.getElementById('recordKeyBtn');
+                const icon = document.getElementById('recordIcon');
+                icon.textContent = '▶';
+                icon.style.color = 'var(--accent)';
+                document.getElementById('recordText').textContent = '录制';
+                document.getElementById('recordText').style.color = 'var(--text-primary)';
+                btn.style.background = 'transparent';
+                const input = document.getElementById('editKeys');
+                input.placeholder = '按下录制按钮后按键';
+            }
+
+            document.getElementById('recordKeyBtn').addEventListener('click', () => {
+                if (isRecording) {
+                    stopRecording();
+                    document.getElementById('recordText').textContent = '录制';
+                } else {
+                    startRecording();
+                    document.getElementById('recordText').textContent = '暂停';
+                }
+            });
+
+            // 录制模式的按键处理
+            const editKeysInput = document.getElementById('editKeys');
+            editKeysInput.addEventListener('keydown', (e) => {
+                // 非录制模式：正常输入，不拦截
+                if (!isRecording) {
+                    return;
+                }
+
+                // 录制模式：阻止冒泡到全局按键检测器
+                e.stopPropagation();
+                e.preventDefault();
+
+                if (e.key === 'Escape') {
+                    stopRecording();
+                    return;
+                }
+
+                const key = normalizeKey(e.key === ' ' ? 'Space' : e.key);
+                if (!recordedKeys.includes(key)) {
+                    recordedKeys.push(key);
+                }
+                editKeysInput.value = recordedKeys.join('+');
+            });
+
+            // 允许手动输入（退出录制模式后）
+            editKeysInput.addEventListener('input', () => {
+                if (!isRecording && editKeysInput.value) {
+                    // 标准化手动输入（只有在按 + 分隔时才处理）
+                    const parts = editKeysInput.value.split('+');
+                    if (parts.length > 1 || editKeysInput.value.endsWith('+')) {
+                        const keys = editKeysInput.value.split('+').map(k => normalizeKey(k.trim())).filter(k => k);
+                        editKeysInput.value = keys.join('+');
+                    }
+                }
             });
 
             // 添加快捷键按钮
@@ -1635,14 +1768,7 @@
                 });
             });
 
-            // 点击遮罩关闭对话框
-            document.querySelectorAll('.float-dialog').forEach(dialog => {
-                dialog.addEventListener('click', (e) => {
-                    if (e.target === dialog) {
-                        dialog.classList.remove('show');
-                    }
-                });
-            });
+            // 不自动关闭：只有点击 X、取消、确认按钮才关闭
         }
 
         init();
