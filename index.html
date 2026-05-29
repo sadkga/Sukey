@@ -473,6 +473,16 @@
                     gap: 4px;
                 ">
                     <span id="keyHintText">💡 直接按下快捷键可跳转到对应记录</span>
+                    <span id="keyComboDisplay" style="
+                        margin-left: 12px;
+                        padding: 2px 8px;
+                        background: var(--bg-hover);
+                        border-radius: 4px;
+                        font-family: var(--font-mono);
+                        font-size: 11px;
+                        color: var(--accent);
+                        display: none;
+                    "></span>
                 </div>
             </div>
 
@@ -583,9 +593,8 @@
         let customShortcuts = {};
         let activeItem = null;
 
-        // 当前按下的键
-        let pressedKeys = [];
-        let keyTimeout = null;
+        // 当前按下的键组合
+        let currentCombo = [];
 
         // 初始化
         function init() {
@@ -611,30 +620,61 @@
 
         // 设置按键检测器
         function setupKeyDetector() {
-            document.addEventListener('keydown', (e) => {
-                // 如果焦点在输入框或下拉框，不拦截
+            // comboTimeout 在外层声明
+            let comboTimeout = null;
+            const comboDisplay = document.getElementById('keyComboDisplay');
+
+            const handleKeyDown = (e) => {
+                // 跳过输入框中的按键
                 if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') {
                     return;
                 }
 
+                // 获取按键名称
+                let keyName = null;
+                if (e.key === 'Control') keyName = 'Ctrl';
+                else if (e.key === 'Alt') keyName = 'Alt';
+                else if (e.key === 'Shift') keyName = 'Shift';
+                else if (e.key === 'Meta') keyName = 'Meta';
+                else if (e.code === 'Space') keyName = 'Space';
+                else if (e.code === 'Enter') keyName = 'Enter';
+                else if (e.code === 'Escape') keyName = 'Esc';
+                else if (e.key.length === 1) keyName = e.key.toUpperCase();
+                else if (e.key.startsWith('F') && e.key.length <= 4) keyName = e.key;
+
+                if (!keyName) return;
+
+                // 阻止浏览器默认行为
                 e.preventDefault();
+                e.stopPropagation();
 
-                const key = getKeyName(e);
-                if (!key) return;
+                // 清除超时
+                if (comboTimeout) clearTimeout(comboTimeout);
 
-                // 清除之前的超时
-                if (keyTimeout) clearTimeout(keyTimeout);
+                // 添加到当前组合（避免重复）
+                if (!currentCombo.includes(keyName)) {
+                    currentCombo.push(keyName);
+                }
 
-                pressedKeys.push(key);
+                // 实时显示当前按下的组合
+                if (comboDisplay) {
+                    comboDisplay.textContent = currentCombo.join(' + ');
+                    comboDisplay.style.display = 'inline';
+                }
 
-                // 500ms 后重置按键组合
-                keyTimeout = setTimeout(() => {
-                    if (pressedKeys.length > 0) {
-                        matchKeys(pressedKeys);
+                // 设置新的超时
+                comboTimeout = setTimeout(() => {
+                    if (currentCombo.length > 0) {
+                        matchKeys([...currentCombo]);
                     }
-                    pressedKeys = [];
-                }, 500);
-            });
+                    currentCombo = [];
+                    if (comboDisplay) {
+                        comboDisplay.style.display = 'none';
+                    }
+                }, 600);
+            };
+
+            document.addEventListener('keydown', handleKeyDown, true);
         }
 
         // 获取按键名称
