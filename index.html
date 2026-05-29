@@ -137,6 +137,7 @@
             padding: 12px 16px;
             background: var(--bg-panel);
             border-bottom: 1px solid var(--border);
+            position: relative;
         }
 
         .software-title {
@@ -246,6 +247,30 @@
         .shortcut-item.highlight {
             background: var(--accent);
             animation: pulse 0.5s ease-in-out;
+        }
+
+        .item-actions {
+            display: none;
+            gap: 4px;
+            margin-left: 8px;
+        }
+
+        .shortcut-item:hover .item-actions {
+            display: flex;
+        }
+
+        .action-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 2px 4px;
+            font-size: 12px;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+        }
+
+        .action-btn:hover {
+            opacity: 1;
         }
 
         @keyframes pulse {
@@ -414,6 +439,177 @@
         .hidden {
             display: none !important;
         }
+
+        /* Context Menu */
+        .context-menu {
+            position: fixed;
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 4px 0;
+            min-width: 150px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            display: none;
+        }
+
+        .context-menu-item {
+            padding: 10px 16px;
+            font-size: 13px;
+            cursor: pointer;
+            color: var(--text-primary);
+        }
+
+        .context-menu-item:hover {
+            background: var(--bg-hover);
+        }
+
+        .context-menu-item.danger {
+            color: #f44336;
+        }
+
+        /* Floating Dialog */
+        .float-dialog {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            display: none;
+        }
+
+        .float-dialog.show {
+            display: flex;
+        }
+
+        .float-dialog-content {
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            width: 380px;
+            max-height: 80vh;
+            overflow: auto;
+        }
+
+        .float-dialog-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .float-dialog-header h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .float-dialog-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 20px;
+            line-height: 1;
+            padding: 0;
+        }
+
+        .float-dialog-close:hover {
+            color: var(--text-primary);
+        }
+
+        .float-dialog-body {
+            padding: 16px;
+        }
+
+        .float-dialog-footer {
+            padding: 12px 16px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .float-dialog-footer button {
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .float-dialog-footer .btn-cancel {
+            background: var(--bg-hover);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+        }
+
+        .float-dialog-footer .btn-cancel:hover {
+            background: var(--bg-active);
+        }
+
+        .float-dialog-footer .btn-danger {
+            background: #f44336;
+            border: none;
+            color: #fff;
+        }
+
+        .float-dialog-footer .btn-danger:hover {
+            background: #d32f2f;
+        }
+
+        .float-dialog-footer .btn-primary {
+            background: var(--accent);
+            border: none;
+            color: #fff;
+        }
+
+        .float-dialog-footer .btn-primary:hover {
+            background: var(--accent-hover);
+        }
+
+        /* Form fields */
+        .form-field {
+            margin-bottom: 12px;
+        }
+
+        .form-field label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .form-field input,
+        .form-field select {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            font-size: 13px;
+        }
+
+        .form-field input:focus,
+        .form-field select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .form-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .form-row .form-field {
+            flex: 1;
+        }
     </style>
 </head>
 
@@ -446,6 +642,23 @@
                 ">
                     <span>+</span> 导入快捷键
                 </button>
+                <button id="addSoftwareBtn" style="
+                    width: 100%;
+                    margin-top: 8px;
+                    padding: 8px;
+                    background: var(--accent);
+                    border: none;
+                    border-radius: 4px;
+                    color: #fff;
+                    font-size: 12px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 6px;
+                ">
+                    <span>+</span> 添加软件
+                </button>
             </div>
         </div>
 
@@ -455,6 +668,21 @@
                     选择软件
                     <span class="badge hidden" id="shortcutCount"></span>
                 </div>
+                <button id="addShortcutBtn" style="
+                    position: absolute;
+                    right: 16px;
+                    top: 12px;
+                    padding: 6px 12px;
+                    background: var(--accent);
+                    border: none;
+                    border-radius: 4px;
+                    color: #fff;
+                    font-size: 12px;
+                    cursor: pointer;
+                    display: none;
+                ">
+                    + 添加快捷键
+                </button>
                 <div class="search-container">
                     <div class="search-box">
                         <span class="icon">🔍</span>
@@ -517,6 +745,97 @@
                     &nbsp;&nbsp;]<br>
                     }
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 删除确认对话框 -->
+    <div id="deleteDialog" class="float-dialog">
+        <div class="float-dialog-content">
+            <div class="float-dialog-header">
+                <h3>删除软件</h3>
+                <button class="float-dialog-close" id="deleteDialogClose">×</button>
+            </div>
+            <div class="float-dialog-body">
+                <p id="deleteDialogText" style="color: var(--text-primary); font-size: 14px;">确定删除该软件及其所有快捷键？</p>
+            </div>
+            <div class="float-dialog-footer">
+                <button class="btn-cancel" id="deleteDialogCancel">取消</button>
+                <button class="btn-danger" id="deleteDialogConfirm">删除</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加软件对话框 -->
+    <div id="addSoftwareDialog" class="float-dialog">
+        <div class="float-dialog-content">
+            <div class="float-dialog-header">
+                <h3>添加软件</h3>
+                <button class="float-dialog-close" id="addSoftwareDialogClose">×</button>
+            </div>
+            <div class="float-dialog-body">
+                <div class="form-field">
+                    <label>软件名称</label>
+                    <input type="text" id="newSoftwareName" placeholder="如：Photoshop">
+                </div>
+                <div class="form-row">
+                    <div class="form-field">
+                        <label>快捷键</label>
+                        <input type="text" id="newShortcutKeys" placeholder="如：Ctrl+Shift+P">
+                    </div>
+                    <div class="form-field">
+                        <label>命令</label>
+                        <input type="text" id="newShortcutCmd" placeholder="如：新建文档">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-field">
+                        <label>分类</label>
+                        <input type="text" id="newShortcutCat" placeholder="如：文件" value="常用">
+                    </div>
+                    <div class="form-field">
+                        <label>描述</label>
+                        <input type="text" id="newShortcutDesc" placeholder="如：新建文档">
+                    </div>
+                </div>
+            </div>
+            <div class="float-dialog-footer">
+                <button class="btn-cancel" id="addSoftwareDialogCancel">取消</button>
+                <button class="btn-primary" id="submitAddSoftware">添加</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑快捷键对话框 -->
+    <div id="editDialog" class="float-dialog">
+        <div class="float-dialog-content">
+            <div class="float-dialog-header">
+                <h3>编辑快捷键</h3>
+                <button class="float-dialog-close" id="editDialogClose">×</button>
+            </div>
+            <div class="float-dialog-body">
+                <div class="form-field">
+                    <label>快捷键</label>
+                    <input type="text" id="editKeys" placeholder="如：Ctrl+Shift+P">
+                </div>
+                <div class="form-field">
+                    <label>命令</label>
+                    <input type="text" id="editCommand" placeholder="命令名称">
+                </div>
+                <div class="form-row">
+                    <div class="form-field">
+                        <label>分类</label>
+                        <input type="text" id="editCategory" placeholder="分类">
+                    </div>
+                    <div class="form-field">
+                        <label>描述</label>
+                        <input type="text" id="editDescription" placeholder="描述">
+                    </div>
+                </div>
+            </div>
+            <div class="float-dialog-footer">
+                <button class="btn-cancel" id="editDialogCancel">取消</button>
+                <button class="btn-primary" id="editDialogSave">保存</button>
             </div>
         </div>
     </div>
@@ -625,7 +944,7 @@
             const comboDisplay = document.getElementById('keyComboDisplay');
 
             const handleKeyDown = (e) => {
-                // 跳过输入框中的按键
+                // 跳过输入框中的按键（让输入框正常工作）
                 if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') {
                     return;
                 }
@@ -638,7 +957,11 @@
                 else if (e.key === 'Meta') keyName = 'Meta';
                 else if (e.code === 'Space') keyName = 'Space';
                 else if (e.code === 'Enter') keyName = 'Enter';
-                else if (e.code === 'Escape') keyName = 'Esc';
+                else if (e.code === 'Escape') {
+                    // 关闭任何打开的对话框
+                    document.querySelectorAll('.float-dialog.show').forEach(d => d.classList.remove('show'));
+                    return;
+                }
                 else if (e.key.length === 1) keyName = e.key.toUpperCase();
                 else if (e.key.startsWith('F') && e.key.length <= 4) keyName = e.key;
 
@@ -788,7 +1111,24 @@
             div.dataset.value = value;
             div.innerHTML = `<span class="icon">${name.charAt(0)}</span>${name}`;
             div.addEventListener('click', () => selectSoftware(value));
+
+            // 右键菜单（仅自定义软件可删除）
+            if (value.startsWith('custom_')) {
+                div.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    const key = value.replace('custom_', '');
+                    showDeleteDialog(key, name);
+                });
+            }
             return div;
+        }
+
+        // 显示删除对话框
+        let pendingDeleteKey = null;
+        function showDeleteDialog(softwareKey, softwareName) {
+            pendingDeleteKey = softwareKey;
+            document.getElementById('deleteDialogText').textContent = `确定删除「${softwareName}」及其所有快捷键？`;
+            document.getElementById('deleteDialog').classList.add('show');
         }
 
         // 选择软件
@@ -798,11 +1138,20 @@
             });
 
             let data = null;
+            let softwareKey = null;
+
             if (software.startsWith('custom_')) {
-                const key = software.replace('custom_', '');
-                data = customShortcuts[key];
+                softwareKey = software.replace('custom_', '');
+                data = customShortcuts[softwareKey];
             } else {
-                data = shortcutsData[software];
+                softwareKey = software;
+                // 如果内置软件已有自定义副本，优先使用自定义版本
+                if (customShortcuts[softwareKey]) {
+                    data = customShortcuts[softwareKey];
+                    software = `custom_${softwareKey}`;
+                } else {
+                    data = shortcutsData[software];
+                }
             }
 
             if (!data || !data.shortcuts) {
@@ -817,6 +1166,10 @@
                 ${data.name}
                 <span class="badge">${data.shortcuts.length} 个快捷键</span>
             `;
+
+            // 显示添加快捷键按钮
+            const addBtn = document.getElementById('addShortcutBtn');
+            addBtn.style.display = 'block';
 
             populateCategorySelect(data.shortcuts);
             renderShortcuts(data.shortcuts);
@@ -839,7 +1192,7 @@
 
             if (keyword && keyword.trim()) {
                 keyword = keyword.toLowerCase().trim();
-                filtered = filtered.filter(s => {
+                filtered = filtered.filter((s, idx) => {
                     // 匹配 command（英文名）
                     const commandMatch = s.command.toLowerCase().includes(keyword);
                     // 匹配 description（中文描述）
@@ -853,8 +1206,14 @@
             }
 
             if (category) {
-                filtered = filtered.filter(s => s.category === category);
+                filtered = filtered.filter((s, idx) => s.category === category);
             }
+
+            // 保持原始索引（用于编辑/删除）
+            filtered = filtered.map((s, idx) => {
+                const originalIdx = currentShortcuts.indexOf(s);
+                return { ...s, index: originalIdx };
+            });
 
             renderShortcuts(filtered);
         }
@@ -876,24 +1235,37 @@
                 return;
             }
 
+            // 判断是否为自定义软件（仅用于区分样式，编辑功能对所有软件开放）
+            const isCustom = currentSoftware && currentSoftware.startsWith('custom_');
+            // 编辑功能：所有软件都可以编辑快捷键，编辑时创建自定义副本
+            const canEdit = currentSoftware !== null;
+            const softwareKey = isCustom ? currentSoftware.replace('custom_', '') : (currentSoftware || null);
+
             // 按分类分组
+            // shortcuts 中的 index 属性来自 filterShortcuts（保留原始位置）或为 undefined（直接渲染）
             const grouped = {};
-            shortcuts.forEach(s => {
+            shortcuts.forEach((s, idx) => {
                 const cat = s.category || '其他';
                 if (!grouped[cat]) grouped[cat] = [];
-                grouped[cat].push(s);
+                // 如果 shortcut 有显式的 index（来自 filter），使用它；否则使用当前遍历的 idx
+                const hasExplicitIndex = s.hasOwnProperty('index');
+                grouped[cat].push({ ...s, index: hasExplicitIndex ? s.index : idx });
             });
 
             let html = '';
             Object.keys(grouped).sort().forEach(category => {
                 html += `<div class="category-group">
                     <div class="category-header">${category}</div>`;
-                grouped[category].forEach(s => {
+                grouped[category].forEach((s) => {
                     html += `
                         <div class="shortcut-item">
                             <span class="keys">${s.keys.join('+')}</span>
                             <span class="command">${s.command}</span>
                             <span class="description">${s.description || ''}</span>
+                            ${canEdit ? `<span class="item-actions">
+                                <button class="action-btn" onclick="editShortcutItem('${softwareKey}', ${s.index})" title="编辑">✏️</button>
+                                <button class="action-btn" onclick="deleteShortcutItem('${softwareKey}', ${s.index})" title="删除">🗑️</button>
+                            </span>` : ''}
                         </div>`;
                 });
                 html += '</div>';
@@ -965,13 +1337,73 @@
         // 从数据库删除快捷键
         async function deleteShortcutFromDb(key) {
             try {
-                const doc = await utools.db.get(`custom_${key}`).catch(() => null);
-                if (doc) {
-                    await utools.db.remove(doc);
-                }
+                const docId = `custom_${key}`;
+                const doc = await utools.db.get(docId);
+                await utools.db.remove(doc);
             } catch (err) {
-                console.error('删除失败:', err);
+                // silent fail
             }
+        }
+
+        // 删除快捷键项
+        async function deleteShortcutItem(softwareKey, shortcutIndex) {
+            // 如果是内置软件（softwareKey 不在 customShortcuts 中），需要先确保有自定义副本
+            if (!customShortcuts[softwareKey]) {
+                // 内置软件没有自定义副本，无法删除
+                alert('内置软件快捷键无法删除');
+                return;
+            }
+            customShortcuts[softwareKey].shortcuts.splice(shortcutIndex, 1);
+            await saveShortcutToDb(softwareKey, customShortcuts[softwareKey]);
+            selectSoftware(`custom_${softwareKey}`);
+        }
+
+        // 编辑快捷键项
+        function editShortcutItem(softwareKey, shortcutIndex) {
+            // 检查是否有自定义副本，如果没有则创建
+            if (!customShortcuts[softwareKey]) {
+                // 从内置数据创建自定义副本
+                let sourceData = null;
+                if (shortcutsData[softwareKey]) {
+                    sourceData = JSON.parse(JSON.stringify(shortcutsData[softwareKey]));
+                } else if (currentSoftware && currentSoftware.startsWith('custom_')) {
+                    // 已经是 custom_ 前缀的情况
+                    const key = currentSoftware.replace('custom_', '');
+                    sourceData = JSON.parse(JSON.stringify(customShortcuts[key]));
+                }
+
+                if (!sourceData) {
+                    alert('无法编辑该软件的快捷键');
+                    return;
+                }
+
+                // 创建自定义副本
+                customShortcuts[softwareKey] = sourceData;
+                saveShortcutToDb(softwareKey, customShortcuts[softwareKey]);
+                populateSoftwareList();
+            }
+
+            const shortcuts = customShortcuts[softwareKey].shortcuts;
+            const shortcut = shortcuts[shortcutIndex];
+            if (!shortcut) return;
+
+            // 使用对话框编辑（代替 prompt）
+            showEditDialog(softwareKey, shortcutIndex, shortcut);
+        }
+
+        // 显示编辑对话框
+        function showEditDialog(softwareKey, shortcutIndex, shortcut) {
+            const dialog = document.getElementById('editDialog');
+            document.getElementById('editKeys').value = shortcut.keys.join('+');
+            document.getElementById('editCommand').value = shortcut.command;
+            document.getElementById('editCategory').value = shortcut.category;
+            document.getElementById('editDescription').value = shortcut.description || '';
+            dialog.dataset.softwareKey = softwareKey;
+            dialog.dataset.shortcutIndex = shortcutIndex;
+            // 恢复标题和按钮文本
+            dialog.querySelector('h3').textContent = '编辑快捷键';
+            document.getElementById('editDialogSave').textContent = '保存';
+            dialog.classList.add('show');
         }
 
         // 导入快捷键
@@ -1045,6 +1477,171 @@
 
             document.getElementById('importArea').addEventListener('click', () => {
                 fileInput.click();
+            });
+
+            // 添加软件按钮
+            document.getElementById('addSoftwareBtn').addEventListener('click', () => {
+                document.getElementById('addSoftwareDialog').classList.add('show');
+                document.getElementById('newSoftwareName').focus();
+            });
+
+            // 关闭添加软件对话框
+            document.getElementById('addSoftwareDialogClose').addEventListener('click', () => {
+                document.getElementById('addSoftwareDialog').classList.remove('show');
+            });
+            document.getElementById('addSoftwareDialogCancel').addEventListener('click', () => {
+                document.getElementById('addSoftwareDialog').classList.remove('show');
+            });
+
+            // 提交添加软件
+            document.getElementById('submitAddSoftware').addEventListener('click', () => {
+                const name = document.getElementById('newSoftwareName').value.trim();
+                const keysStr = document.getElementById('newShortcutKeys').value.trim();
+                const cmd = document.getElementById('newShortcutCmd').value.trim();
+                const cat = document.getElementById('newShortcutCat').value.trim() || '常用';
+                const desc = document.getElementById('newShortcutDesc').value.trim();
+
+                if (!name || !keysStr || !cmd) {
+                    alert('请填写软件名称、快捷键和命令');
+                    return;
+                }
+
+                const key = name.toLowerCase().replace(/\s+/g, '_');
+                const shortcut = {
+                    keys: keysStr.split('+').map(k => k.trim()),
+                    command: cmd,
+                    category: cat,
+                    description: desc
+                };
+
+                if (!customShortcuts[key]) {
+                    customShortcuts[key] = { name: name, shortcuts: [] };
+                }
+                customShortcuts[key].shortcuts.push(shortcut);
+
+                saveShortcutToDb(key, customShortcuts[key]).then(() => {
+                    populateSoftwareList();
+                    selectSoftware(`custom_${key}`);
+                    // 清空并关闭对话框
+                    document.getElementById('newSoftwareName').value = '';
+                    document.getElementById('newShortcutKeys').value = '';
+                    document.getElementById('newShortcutCmd').value = '';
+                    document.getElementById('newShortcutDesc').value = '';
+                    document.getElementById('newShortcutCat').value = '常用';
+                    document.getElementById('addSoftwareDialog').classList.remove('show');
+                });
+            });
+
+            // 删除对话框 - 确认
+            document.getElementById('deleteDialogConfirm').addEventListener('click', () => {
+                if (pendingDeleteKey) {
+                    (async () => {
+                        await deleteShortcutFromDb(pendingDeleteKey);
+                        delete customShortcuts[pendingDeleteKey];
+                        pendingDeleteKey = null;
+                        populateSoftwareList();
+                        showEmpty('选择软件查看快捷键', '或点击上方「导入快捷键」添加自定义数据');
+                    })();
+                }
+                document.getElementById('deleteDialog').classList.remove('show');
+            });
+
+            // 删除对话框 - 取消
+            document.getElementById('deleteDialogClose').addEventListener('click', () => {
+                pendingDeleteKey = null;
+                document.getElementById('deleteDialog').classList.remove('show');
+            });
+            document.getElementById('deleteDialogCancel').addEventListener('click', () => {
+                pendingDeleteKey = null;
+                document.getElementById('deleteDialog').classList.remove('show');
+            });
+
+            // 编辑对话框事件
+            document.getElementById('editDialogClose').addEventListener('click', () => {
+                document.getElementById('editDialog').classList.remove('show');
+            });
+            document.getElementById('editDialogCancel').addEventListener('click', () => {
+                document.getElementById('editDialog').classList.remove('show');
+            });
+
+            // 添加快捷键按钮
+            document.getElementById('addShortcutBtn').addEventListener('click', () => {
+                const softwareKey = currentSoftware.startsWith('custom_')
+                    ? currentSoftware.replace('custom_', '')
+                    : currentSoftware;
+
+                // 如果是内置软件，需要先创建自定义副本
+                if (!currentSoftware.startsWith('custom_')) {
+                    if (!customShortcuts[softwareKey]) {
+                        const sourceData = JSON.parse(JSON.stringify(shortcutsData[softwareKey]));
+                        customShortcuts[softwareKey] = sourceData;
+                        saveShortcutToDb(softwareKey, customShortcuts[softwareKey]);
+                        populateSoftwareList();
+                    }
+                    // 切换到自定义版本
+                    selectSoftware(`custom_${softwareKey}`);
+                }
+
+                // 清空表单并显示添加对话框
+                document.getElementById('editKeys').value = '';
+                document.getElementById('editCommand').value = '';
+                document.getElementById('editCategory').value = '常用';
+                document.getElementById('editDescription').value = '';
+
+                const dialog = document.getElementById('editDialog');
+                dialog.dataset.softwareKey = softwareKey;
+                dialog.dataset.shortcutIndex = '-1';  // -1 表示新增
+                dialog.querySelector('h3').textContent = '添加快捷键';
+                document.getElementById('editDialogSave').textContent = '添加';
+                dialog.classList.add('show');
+            });
+
+            document.getElementById('editDialogSave').addEventListener('click', () => {
+                const dialog = document.getElementById('editDialog');
+                const softwareKey = dialog.dataset.softwareKey;
+                const shortcutIndex = parseInt(dialog.dataset.shortcutIndex);
+                const isAdding = shortcutIndex === -1;
+
+                const newKeys = document.getElementById('editKeys').value.trim();
+                const newCommand = document.getElementById('editCommand').value.trim();
+                const newCategory = document.getElementById('editCategory').value.trim();
+                const newDesc = document.getElementById('editDescription').value.trim();
+
+                if (!newKeys || !newCommand) {
+                    alert('请填写快捷键和命令');
+                    return;
+                }
+
+                const shortcuts = customShortcuts[softwareKey].shortcuts;
+                const newShortcut = {
+                    keys: newKeys.split('+').map(k => k.trim()),
+                    command: newCommand,
+                    category: newCategory || '常用',
+                    description: newDesc
+                };
+
+                if (isAdding) {
+                    shortcuts.push(newShortcut);
+                    // 恢复标题和按钮文本
+                    dialog.querySelector('h3').textContent = '编辑快捷键';
+                    document.getElementById('editDialogSave').textContent = '保存';
+                } else {
+                    shortcuts[shortcutIndex] = newShortcut;
+                }
+
+                saveShortcutToDb(softwareKey, customShortcuts[softwareKey]).then(() => {
+                    selectSoftware(`custom_${softwareKey}`);
+                    dialog.classList.remove('show');
+                });
+            });
+
+            // 点击遮罩关闭对话框
+            document.querySelectorAll('.float-dialog').forEach(dialog => {
+                dialog.addEventListener('click', (e) => {
+                    if (e.target === dialog) {
+                        dialog.classList.remove('show');
+                    }
+                });
             });
         }
 
