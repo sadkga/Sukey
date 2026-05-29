@@ -1,0 +1,38 @@
+{
+    "main": "index.html",
+    "logo": "logo.png",
+    "preload": "preload.js",
+    "features": [
+        {
+            "code": "list",
+            "explain": "查看当前软件快捷键列表",
+            "cmds": [
+                {
+                    "type": "window",
+                    "label": "快捷键列表",
+                    "match": {
+                        "app": [
+                            "Code.exe",
+                            "chrome.exe",
+                            "msedge.exe",
+                            "firefox.exe",
+                            "notepad.exe",
+                            "explorer.exe"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "code": "search",
+            "explain": "搜索快捷键",
+            "cmds": [
+                "sk",
+                "快捷键"
+            ]
+        }
+    ],
+    "pluginSetting": {
+        "height": 500
+    }
+}

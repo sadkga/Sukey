@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sukey - 快捷键管理</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-dark: #1e1e1e;
+            --bg-panel: #252526;
+            --bg-hover: #2a2d2e;
+            --bg-active: #37373d;
+            --border: #3c3c3c;
+            --text-primary: #cccccc;
+            --text-secondary: #858585;
+            --accent: #007acc;
+            --accent-hover: #0098ff;
+            --font-mono: 'Cascadia Code', 'Fira Code', Consolas, 'SF Mono', monospace;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Title Bar */
+        .title-bar {
+            height: 35px;
+            background: var(--bg-panel);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            -webkit-app-region: drag;
+        }
+
+        .title-bar .logo {
+            width: 16px;
+            height: 16px;
+            background: var(--accent);
+            border-radius: 3px;
+            margin-right: 8px;
+        }
+
+        .title-bar .title {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        /* Main Container */
+        .main-container {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 180px;
+            background: var(--bg-panel);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 12px;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            letter-spacing: 0.5px;
+        }
+
+        .software-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .software-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--text-primary);
+            transition: background 0.15s;
+        }
+
+        .software-item:hover {
+            background: var(--bg-hover);
+        }
+
+        .software-item.active {
+            background: var(--bg-active);
+        }
+
+        .software-item .icon {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        .software-item.vscode .icon { background: #007acc; }
+        .software-item.chrome .icon { background: #4285f4; }
+        .software-item.edge .icon { background: #0078d4; }
+        .software-item.firefox .icon { background: #ff7139; }
+        .software-item.custom .icon { background: #6c6c6c; }
+
+        /* Content Area */
+        .content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Header with search */
+        .content-header {
+            padding: 12px 16px;
+            background: var(--bg-panel);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .software-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .software-title .badge {
+            font-size: 11px;
+            padding: 2px 8px;
+            background: var(--accent);
+            color: #fff;
+            border-radius: 10px;
+            font-weight: normal;
+        }
+
+        .search-container {
+            display: flex;
+            gap: 8px;
+        }
+
+        .search-box {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 0 10px;
+        }
+
+        .search-box:focus-within {
+            border-color: var(--accent);
+        }
+
+        .search-box input {
+            flex: 1;
+            padding: 8px 0;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--text-primary);
+            font-size: 13px;
+        }
+
+        .search-box input::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .search-box .icon {
+            color: var(--text-secondary);
+            font-size: 12px;
+        }
+
+        .category-select {
+            padding: 8px 12px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 13px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .category-select:focus {
+            border-color: var(--accent);
+        }
+
+        /* Shortcut List */
+        .shortcut-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px 0;
+        }
+
+        .category-group {
+            margin-bottom: 16px;
+        }
+
+        .category-header {
+            padding: 8px 16px;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            letter-spacing: 0.5px;
+            background: var(--bg-panel);
+            position: sticky;
+            top: 0;
+        }
+
+        .shortcut-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 16px;
+            transition: background 0.15s;
+        }
+
+        .shortcut-item:hover {
+            background: var(--bg-hover);
+        }
+
+        .keys {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: #9cdcfe;
+            background: #3c3c3c;
+            padding: 4px 8px;
+            border-radius: 3px;
+            min-width: 80px;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .command {
+            flex: 1;
+            margin: 0 16px;
+            font-size: 13px;
+        }
+
+        .description {
+            font-size: 12px;
+            color: var(--text-secondary);
+            max-width: 200px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Empty State */
+        .empty-state {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+        }
+
+        .empty-state .icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-state .title {
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+
+        .empty-state .desc {
+            font-size: 13px;
+        }
+
+        /* Import Dialog */
+        .import-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        .import-dialog {
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            width: 400px;
+            overflow: hidden;
+        }
+
+        .import-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .import-header h3 {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .import-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 18px;
+            line-height: 1;
+        }
+
+        .import-body {
+            padding: 20px;
+        }
+
+        .import-area {
+            border: 2px dashed var(--border);
+            border-radius: 6px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.15s;
+        }
+
+        .import-area:hover {
+            border-color: var(--accent);
+        }
+
+        .import-area p {
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+        }
+
+        .import-btn {
+            display: inline-block;
+            padding: 8px 16px;
+            background: var(--accent);
+            color: #fff;
+            border-radius: 4px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .import-format {
+            margin-top: 16px;
+            padding: 12px;
+            background: var(--bg-dark);
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-align: left;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* Hidden */
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="title-bar">
+        <div class="logo"></div>
+        <span class="title">Sukey - 快捷键管理</span>
+    </div>
+
+    <div class="main-container">
+        <div class="sidebar">
+            <div class="sidebar-header">软件</div>
+            <div class="software-list" id="softwareList">
+                <!-- Populated by JS -->
+            </div>
+            <div style="padding: 8px;">
+                <button id="importBtn" style="
+                    width: 100%;
+                    padding: 8px;
+                    background: var(--bg-hover);
+                    border: 1px solid var(--border);
+                    border-radius: 4px;
+                    color: var(--text-primary);
+                    font-size: 12px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 6px;
+                ">
+                    <span>+</span> 导入快捷键
+                </button>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="content-header">
+                <div class="software-title" id="softwareTitle">
+                    选择软件
+                    <span class="badge hidden" id="shortcutCount"></span>
+                </div>
+                <div class="search-container">
+                    <div class="search-box">
+                        <span class="icon">🔍</span>
+                        <input type="text" id="searchInput" placeholder="搜索快捷键...">
+                    </div>
+                    <select class="category-select" id="categorySelect">
+                        <option value="">全部分类</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="shortcut-list" id="shortcutList">
+                <div class="empty-state" id="emptyState">
+                    <div class="icon">⌨️</div>
+                    <div class="title">选择软件查看快捷键</div>
+                    <div class="desc">或点击上方「导入快捷键」添加自定义数据</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="import-overlay hidden" id="importOverlay">
+        <div class="import-dialog">
+            <div class="import-header">
+                <h3>导入快捷键</h3>
+                <button class="import-close" id="importClose">×</button>
+            </div>
+            <div class="import-body">
+                <div class="import-area" id="importArea">
+                    <p>点击选择 JSON 文件</p>
+                    <input type="file" id="fileInput" accept=".json" style="display:none">
+                    <span class="import-btn">选择文件</span>
+                </div>
+                <div class="import-format">
+                    <strong>格式要求：</strong><br><br>
+                    {<br>
+                    &nbsp;&nbsp;"software": "VSCode",<br>
+                    &nbsp;&nbsp;"shortcuts": [<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;{ "keys": ["Ctrl","P"], "command": "Quick Open", "category": "常用", "description": "快速打开" }<br>
+                    &nbsp;&nbsp;]<br>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 内置快捷键数据
+        const shortcutsData = {
+            vscode: {
+                name: 'VSCode',
+                shortcuts: [
+                    { keys: ['Ctrl', 'Shift', 'P'], command: 'Command Palette', category: '常用', description: '打开命令面板' },
+                    { keys: ['Ctrl', 'P'], command: 'Quick Open', category: '常用', description: '快速打开文件' },
+                    { keys: ['Ctrl', 'Shift', 'N'], command: 'New Window', category: '常用', description: '新窗口' },
+                    { keys: ['Ctrl', 'W'], command: 'Close Window', category: '常用', description: '关闭窗口' },
+                    { keys: ['Ctrl', ','], command: 'Settings', category: '常用', description: '打开设置' },
+                    { keys: ['Ctrl', 'X'], command: 'Cut Line', category: '编辑', description: '剪切整行' },
+                    { keys: ['Ctrl', 'C'], command: 'Copy Line', category: '编辑', description: '复制整行' },
+                    { keys: ['Alt', 'Up'], command: 'Move Line Up', category: '编辑', description: '将行上移' },
+                    { keys: ['Alt', 'Down'], command: 'Move Line Down', category: '编辑', description: '将行下移' },
+                    { keys: ['Ctrl', 'Shift', 'K'], command: 'Delete Line', category: '编辑', description: '删除整行' },
+                    { keys: ['Ctrl', '/'], command: 'Toggle Comment', category: '编辑', description: '切换行注释' },
+                    { keys: ['Alt', 'Shift', 'A'], command: 'Block Comment', category: '编辑', description: '切换块注释' },
+                    { keys: ['Ctrl', 'F'], command: 'Find', category: '搜索', description: '查找' },
+                    { keys: ['Ctrl', 'H'], command: 'Replace', category: '搜索', description: '替换' },
+                    { keys: ['Ctrl', 'Shift', 'F'], command: 'Find in Files', category: '搜索', description: '在文件中查找' },
+                    { keys: ['F3'], command: 'Find Next', category: '搜索', description: '查找下一个' },
+                    { keys: ['Shift', 'F3'], command: 'Find Previous', category: '搜索', description: '查找上一个' },
+                    { keys: ['Ctrl', 'B'], command: 'Toggle Sidebar', category: '视图', description: '切换侧边栏' },
+                    { keys: ['Ctrl', 'J'], command: 'Toggle Panel', category: '视图', description: '切换面板' },
+                    { keys: ['Ctrl', '`'], command: 'Toggle Terminal', category: '视图', description: '切换终端' },
+                    { keys: ['Ctrl', 'K', 'Z'], command: 'Zen Mode', category: '视图', description: '进入禅模式' },
+                    { keys: ['Ctrl', '\\'], command: 'Split Editor', category: '编辑器', description: '拆分编辑器' },
+                    { keys: ['Ctrl', 'G'], command: 'Go to Line', category: '导航', description: '跳转到行' },
+                    { keys: ['Ctrl', 'Shift', 'O'], command: 'Go to Symbol', category: '导航', description: '跳转到符号' },
+                    { keys: ['Alt', 'Left'], command: 'Go Back', category: '导航', description: '后退' },
+                    { keys: ['Alt', 'Right'], command: 'Go Forward', category: '导航', description: '前进' },
+                    { keys: ['Ctrl', 'Tab'], command: 'Switch Tab', category: '编辑器', description: '切换标签页' },
+                    { keys: ['F2'], command: 'Rename Symbol', category: '编辑', description: '重命名符号' },
+                    { keys: ['Ctrl', 'Shift', 'L'], command: 'Select All Occurrences', category: '编辑', description: '选择所有匹配' },
+                    { keys: ['Ctrl', 'D'], command: 'Add Selection to Next Find', category: '编辑', description: '将选择添加到下一个查找' },
+                    { keys: ['Alt', 'Shift', 'F'], command: 'Format Document', category: '编辑', description: '格式化文档' },
+                ]
+            },
+            chrome: {
+                name: 'Chrome',
+                shortcuts: [
+                    { keys: ['Ctrl', 'T'], command: 'New Tab', category: '标签页', description: '打开新标签页' },
+                    { keys: ['Ctrl', 'W'], command: 'Close Tab', category: '标签页', description: '关闭当前标签页' },
+                    { keys: ['Ctrl', 'Shift', 'T'], command: 'Reopen Closed Tab', category: '标签页', description: '重新打开已关闭标签' },
+                    { keys: ['Ctrl', 'Tab'], command: 'Next Tab', category: '标签页', description: '切换到下一个标签' },
+                    { keys: ['Ctrl', 'Shift', 'Tab'], command: 'Previous Tab', category: '标签页', description: '切换到上一个标签' },
+                    { keys: ['Ctrl', 'L'], command: 'Address Bar', category: '导航', description: '跳转到地址栏' },
+                    { keys: ['F5'], command: 'Refresh', category: '导航', description: '刷新页面' },
+                    { keys: ['Ctrl', 'Shift', 'R'], command: 'Hard Refresh', category: '导航', description: '硬刷新（清除缓存）' },
+                    { keys: ['Alt', 'Left'], command: 'Go Back', category: '导航', description: '后退' },
+                    { keys: ['Alt', 'Right'], command: 'Go Forward', category: '导航', description: '前进' },
+                    { keys: ['Ctrl', 'D'], command: 'Bookmark', category: '书签', description: '收藏当前页' },
+                    { keys: ['Ctrl', 'H'], command: 'History', category: '历史', description: '显示历史记录' },
+                    { keys: ['Ctrl', 'J'], command: 'Downloads', category: '下载', description: '显示下载内容' },
+                    { keys: ['Ctrl', 'F'], command: 'Find', category: '页面', description: '在页面中查找' },
+                    { keys: ['Ctrl', '+'], command: 'Zoom In', category: '视图', description: '放大' },
+                    { keys: ['Ctrl', '-'], command: 'Zoom Out', category: '视图', description: '缩小' },
+                    { keys: ['Ctrl', '0'], command: 'Reset Zoom', category: '视图', description: '重置缩放' },
+                    { keys: ['F11'], command: 'Full Screen', category: '视图', description: '切换全屏' },
+                    { keys: ['Ctrl', 'Shift', 'I'], command: 'DevTools', category: '开发者', description: '打开开发者工具' },
+                    { keys: ['Ctrl', 'N'], command: 'New Window', category: '窗口', description: '打开新窗口' },
+                    { keys: ['Ctrl', 'Shift', 'N'], command: 'Incognito', category: '窗口', description: '打开无痕窗口' },
+                ]
+            }
+        };
+
+        let currentSoftware = null;
+        let currentShortcuts = [];
+        let customShortcuts = {};
+        let activeItem = null;
+
+        // 初始化
+        function init() {
+            utools.onPluginEnter(({ code, type, payload }) => {
+                if (utools.isDarkColors()) {
+                    document.body.classList.add('dark');
+                }
+            });
+
+            populateSoftwareList();
+            setupEventListeners();
+            loadCustomShortcuts();
+        }
+
+        // 填充软件列表
+        function populateSoftwareList() {
+            const list = document.getElementById('softwareList');
+            list.innerHTML = '';
+
+            Object.keys(shortcutsData).forEach(key => {
+                const item = createSoftwareItem(key, shortcutsData[key].name, key);
+                list.appendChild(item);
+            });
+
+            Object.keys(customShortcuts).forEach(key => {
+                const item = createSoftwareItem(key, customShortcuts[key].name, `custom_${key}`);
+                list.appendChild(item);
+            });
+        }
+
+        function createSoftwareItem(key, name, value) {
+            const div = document.createElement('div');
+            div.className = `software-item ${key}`;
+            div.dataset.value = value;
+            div.innerHTML = `<span class="icon">${name.charAt(0)}</span>${name}`;
+            div.addEventListener('click', () => selectSoftware(value));
+            return div;
+        }
+
+        // 选择软件
+        function selectSoftware(software) {
+            document.querySelectorAll('.software-item').forEach(item => {
+                item.classList.toggle('active', item.dataset.value === software);
+            });
+
+            let data = null;
+            if (software.startsWith('custom_')) {
+                const key = software.replace('custom_', '');
+                data = customShortcuts[key];
+            } else {
+                data = shortcutsData[software];
+            }
+
+            if (!data || !data.shortcuts) {
+                showEmpty('暂无数据');
+                return;
+            }
+
+            currentSoftware = software;
+            currentShortcuts = data.shortcuts;
+
+            document.getElementById('softwareTitle').innerHTML = `
+                ${data.name}
+                <span class="badge">${data.shortcuts.length} 个快捷键</span>
+            `;
+
+            populateCategorySelect(data.shortcuts);
+            renderShortcuts(data.shortcuts);
+        }
+
+        // 填充分类选择
+        function populateCategorySelect(shortcuts) {
+            const select = document.getElementById('categorySelect');
+            const categories = [...new Set(shortcuts.map(s => s.category))];
+            select.innerHTML = '<option value="">全部分类</option>';
+            categories.sort().forEach(cat => {
+                select.innerHTML += `<option value="${cat}">${cat}</option>`;
+            });
+        }
+
+        // 筛选快捷键
+        function filterShortcuts(keyword, category) {
+            let filtered = currentShortcuts;
+
+            if (keyword) {
+                keyword = keyword.toLowerCase();
+                filtered = filtered.filter(s =>
+                    s.command.toLowerCase().includes(keyword) ||
+                    (s.description && s.description.toLowerCase().includes(keyword)) ||
+                    s.keys.join('+').toLowerCase().includes(keyword)
+                );
+            }
+
+            if (category) {
+                filtered = filtered.filter(s => s.category === category);
+            }
+
+            renderShortcuts(filtered);
+        }
+
+        // 渲染快捷键列表
+        function renderShortcuts(shortcuts) {
+            const container = document.getElementById('shortcutList');
+            const emptyState = document.getElementById('emptyState');
+
+            if (shortcuts.length === 0) {
+                container.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                emptyState.querySelector('.title').textContent = '没有找到匹配的快捷键';
+                emptyState.querySelector('.desc').textContent = '尝试其他关键词或分类';
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+
+            // 按分类分组
+            const grouped = {};
+            shortcuts.forEach(s => {
+                const cat = s.category || '其他';
+                if (!grouped[cat]) grouped[cat] = [];
+                grouped[cat].push(s);
+            });
+
+            let html = '';
+            Object.keys(grouped).sort().forEach(category => {
+                html += `<div class="category-group">
+                    <div class="category-header">${category}</div>`;
+                grouped[category].forEach(s => {
+                    html += `
+                        <div class="shortcut-item">
+                            <span class="keys">${s.keys.join('+')}</span>
+                            <span class="command">${s.command}</span>
+                            <span class="description">${s.description || ''}</span>
+                        </div>`;
+                });
+                html += '</div>';
+            });
+
+            container.innerHTML = html;
+        }
+
+        // 显示空状态
+        function showEmpty(title, desc) {
+            const container = document.getElementById('shortcutList');
+            const emptyState = document.getElementById('emptyState');
+            emptyState.classList.remove('hidden');
+            emptyState.querySelector('.title').textContent = title || '选择软件查看快捷键';
+            emptyState.querySelector('.desc').textContent = desc || '或点击上方「导入快捷键」添加自定义数据';
+            container.innerHTML = '';
+            container.appendChild(emptyState);
+        }
+
+        // 加载自定义快捷键
+        function loadCustomShortcuts() {
+            try {
+                const stored = utools.dbStorage.getItem('customShortcuts');
+                if (stored) {
+                    customShortcuts = JSON.parse(stored);
+                    populateSoftwareList();
+                }
+            } catch (err) {
+                customShortcuts = {};
+            }
+        }
+
+        // 导入快捷键
+        function importShortcuts(data) {
+            const key = data.software.toLowerCase().replace(/\s+/g, '_');
+            customShortcuts[key] = {
+                name: data.software,
+                shortcuts: data.shortcuts.map(s => ({
+                    keys: s.keys || [],
+                    command: s.command || 'Unknown',
+                    category: s.category || '其他',
+                    description: s.description || ''
+                }))
+            };
+
+            utools.dbStorage.setItem('customShortcuts', JSON.stringify(customShortcuts));
+            populateSoftwareList();
+            selectSoftware(`custom_${key}`);
+        }
+
+        // 设置事件监听
+        function setupEventListeners() {
+            document.getElementById('searchInput').addEventListener('input', (e) => {
+                const category = document.getElementById('categorySelect').value;
+                filterShortcuts(e.target.value, category);
+            });
+
+            document.getElementById('categorySelect').addEventListener('change', (e) => {
+                const keyword = document.getElementById('searchInput').value;
+                filterShortcuts(keyword, e.target.value);
+            });
+
+            document.getElementById('importBtn').addEventListener('click', () => {
+                document.getElementById('importOverlay').classList.remove('hidden');
+            });
+
+            document.getElementById('importClose').addEventListener('click', () => {
+                document.getElementById('importOverlay').classList.add('hidden');
+            });
+
+            document.getElementById('importOverlay').addEventListener('click', (e) => {
+                if (e.target === document.getElementById('importOverlay')) {
+                    document.getElementById('importOverlay').classList.add('hidden');
+                }
+            });
+
+            const fileInput = document.getElementById('fileInput');
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const data = JSON.parse(event.target.result);
+                        if (data.software && data.shortcuts && Array.isArray(data.shortcuts)) {
+                            importShortcuts(data);
+                            document.getElementById('importOverlay').classList.add('hidden');
+                        } else {
+                            alert('文件格式不正确');
+                        }
+                    } catch (err) {
+                        alert('JSON 解析失败');
+                    }
+                };
+                reader.readAsText(file);
+                fileInput.value = '';
+            });
+
+            document.getElementById('importArea').addEventListener('click', () => {
+                fileInput.click();
+            });
+        }
+
+        init();
+    </script>
+</body>
+
+</html>
