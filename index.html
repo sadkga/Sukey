@@ -915,32 +915,81 @@
         }
 
         // 加载自定义快捷键
-        function loadCustomShortcuts() {
+        async function loadCustomShortcuts() {
             try {
-                const stored = utools.dbStorage.getItem('customShortcuts');
-                if (stored) {
-                    customShortcuts = JSON.parse(stored);
-                    populateSoftwareList();
+                const result = await utools.db.allDocs();
+                customShortcuts = {};
+
+                if (Array.isArray(result)) {
+                    result.forEach(doc => {
+                        if (doc._id && doc._id.startsWith('custom_') && doc.data) {
+                            const key = doc._id.replace('custom_', '');
+                            customShortcuts[key] = doc.data;
+                        }
+                    });
                 }
+                populateSoftwareList();
             } catch (err) {
                 customShortcuts = {};
             }
         }
 
+        // 保存单个软件快捷键到数据库
+        async function saveShortcutToDb(key, data) {
+            try {
+                const docId = `custom_${key}`;
+                let existing = null;
+                try {
+                    existing = await utools.db.get(docId);
+                } catch (e) {
+                    // 文档不存在，正常
+                }
+
+                if (existing) {
+                    await utools.db.put({
+                        _id: docId,
+                        _rev: existing._rev,
+                        data: data
+                    });
+                } else {
+                    await utools.db.put({
+                        _id: docId,
+                        data: data
+                    });
+                }
+            } catch (err) {
+                // silent fail
+            }
+        }
+
+        // 从数据库删除快捷键
+        async function deleteShortcutFromDb(key) {
+            try {
+                const doc = await utools.db.get(`custom_${key}`).catch(() => null);
+                if (doc) {
+                    await utools.db.remove(doc);
+                }
+            } catch (err) {
+                console.error('删除失败:', err);
+            }
+        }
+
         // 导入快捷键
-        function importShortcuts(data) {
+        async function importShortcuts(data) {
             const key = data.software.toLowerCase().replace(/\s+/g, '_');
+            const shortcuts = data.shortcuts.map(s => ({
+                keys: s.keys || [],
+                command: s.command || 'Unknown',
+                category: s.category || '其他',
+                description: s.description || ''
+            }));
+
             customShortcuts[key] = {
                 name: data.software,
-                shortcuts: data.shortcuts.map(s => ({
-                    keys: s.keys || [],
-                    command: s.command || 'Unknown',
-                    category: s.category || '其他',
-                    description: s.description || ''
-                }))
+                shortcuts: shortcuts
             };
 
-            utools.dbStorage.setItem('customShortcuts', JSON.stringify(customShortcuts));
+            await saveShortcutToDb(key, customShortcuts[key]);
             populateSoftwareList();
             selectSoftware(`custom_${key}`);
         }
