@@ -1474,6 +1474,51 @@
             selectSoftware(`custom_${key}`);
         }
 
+        // 录制快捷键
+        let recordedKeys = [];
+
+        function normalizeKey(key) {
+            const map = {
+                'Control': 'Ctrl',
+                'Alt': 'Alt',
+                'Shift': 'Shift',
+                'Meta': 'Meta',
+                ' ': 'Space'
+            };
+            if (map[key]) return map[key];
+            if (key.length === 1) return key.toUpperCase();
+            if (key.startsWith('F') && key.length <= 4) return key;
+            return key;
+        }
+
+        function startRecording() {
+            isRecording = true;
+            recordedKeys = [];
+            const btn = document.getElementById('recordKeyBtn');
+            const icon = document.getElementById('recordIcon');
+            icon.textContent = '⏸';
+            icon.style.color = '#fff';
+            document.getElementById('recordText').style.color = '#fff';
+            btn.style.background = 'var(--accent)';
+            const input = document.getElementById('editKeys');
+            input.value = '';
+            input.placeholder = '按下按键...';
+            input.focus();
+        }
+
+        function stopRecording() {
+            isRecording = false;
+            const btn = document.getElementById('recordKeyBtn');
+            const icon = document.getElementById('recordIcon');
+            icon.textContent = '▶';
+            icon.style.color = 'var(--accent)';
+            document.getElementById('recordText').textContent = '录制';
+            document.getElementById('recordText').style.color = 'var(--text-primary)';
+            btn.style.background = 'transparent';
+            const input = document.getElementById('editKeys');
+            input.placeholder = '按下录制按钮后按键';
+        }
+
         // 设置事件监听
         function setupEventListeners() {
             document.getElementById('searchInput').addEventListener('input', (e) => {
@@ -1644,50 +1689,6 @@
             });
 
             // 录制快捷键按钮
-            let recordedKeys = [];
-
-            function normalizeKey(key) {
-                const map = {
-                    'Control': 'Ctrl',
-                    'Alt': 'Alt',
-                    'Shift': 'Shift',
-                    'Meta': 'Meta',
-                    ' ': 'Space'
-                };
-                if (map[key]) return map[key];
-                if (key.length === 1) return key.toUpperCase();
-                if (key.startsWith('F') && key.length <= 4) return key;
-                return key;
-            }
-
-            function startRecording() {
-                isRecording = true;
-                recordedKeys = [];
-                const btn = document.getElementById('recordKeyBtn');
-                const icon = document.getElementById('recordIcon');
-                icon.textContent = '⏸';
-                icon.style.color = '#fff';
-                document.getElementById('recordText').style.color = '#fff';
-                btn.style.background = 'var(--accent)';
-                const input = document.getElementById('editKeys');
-                input.value = '';
-                input.placeholder = '按下按键...';
-                input.focus();
-            }
-
-            function stopRecording() {
-                isRecording = false;
-                const btn = document.getElementById('recordKeyBtn');
-                const icon = document.getElementById('recordIcon');
-                icon.textContent = '▶';
-                icon.style.color = 'var(--accent)';
-                document.getElementById('recordText').textContent = '录制';
-                document.getElementById('recordText').style.color = 'var(--text-primary)';
-                btn.style.background = 'transparent';
-                const input = document.getElementById('editKeys');
-                input.placeholder = '按下录制按钮后按键';
-            }
-
             document.getElementById('recordKeyBtn').addEventListener('click', () => {
                 if (isRecording) {
                     stopRecording();
