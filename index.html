@@ -22,7 +22,23 @@
             --text-secondary: #858585;
             --accent: #007acc;
             --accent-hover: #0098ff;
+            --keys-color: #9cdcfe;
+            --keys-bg: #3c3c3c;
             --font-mono: 'Cascadia Code', 'Fira Code', Consolas, 'SF Mono', monospace;
+        }
+
+        [data-theme="light"] {
+            --bg-dark: #f5f5f5;
+            --bg-panel: #ffffff;
+            --bg-hover: #e8e8e8;
+            --bg-active: #d4d4d4;
+            --border: #d4d4d4;
+            --text-primary: #333333;
+            --text-secondary: #666666;
+            --accent: #0078d4;
+            --accent-hover: #106ebe;
+            --keys-color: #0078d4;
+            --keys-bg: #e8e8e8;
         }
 
         body {
@@ -33,6 +49,7 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
+            transition: background 0.2s, color 0.2s;
         }
 
         /* Title Bar */
@@ -55,8 +72,10 @@
         }
 
         .title-bar .title {
-            font-size: 12px;
-            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary);
+            letter-spacing: 0.3px;
         }
 
         /* Main Container */
@@ -116,13 +135,10 @@
             justify-content: center;
             font-size: 10px;
             font-weight: bold;
+            color: #fff;
         }
 
-        .software-item.vscode .icon { background: #007acc; }
-        .software-item.chrome .icon { background: #4285f4; }
-        .software-item.edge .icon { background: #0078d4; }
-        .software-item.firefox .icon { background: #ff7139; }
-        .software-item.custom .icon { background: #6c6c6c; }
+        .software-item .icon { background: var(--text-secondary); }
 
         /* Content Area */
         .content {
@@ -248,6 +264,14 @@
             background: var(--accent);
             animation: pulse 0.5s ease-in-out;
         }
+        .shortcut-item.highlight .keys {
+            background: rgba(255,255,255,0.3);
+            color: #fff;
+        }
+        .shortcut-item.highlight .command,
+        .shortcut-item.highlight .description {
+            color: #fff;
+        }
 
         .item-actions {
             display: none;
@@ -281,8 +305,8 @@
         .keys {
             font-family: var(--font-mono);
             font-size: 12px;
-            color: #9cdcfe;
-            background: #3c3c3c;
+            color: var(--keys-color);
+            background: var(--keys-bg);
             padding: 4px 8px;
             border-radius: 3px;
             min-width: 80px;
@@ -615,13 +639,31 @@
 
 <body>
     <div class="title-bar">
-        <div class="logo"></div>
-        <span class="title">Sukey - 快捷键管理</span>
+        <img src="logo.png" style="width: 16px; height: 16px; margin-right: 8px;">
+        <span class="title">Sukey</span>
+        <span id="themeToggle" style="margin-left: auto; cursor: pointer; padding: 4px 8px; font-size: 12px; -webkit-app-region: no-drag;">🌙</span>
+        <span id="helpBtn" style="cursor: pointer; padding: 4px 8px; font-size: 12px; -webkit-app-region: no-drag;">？</span>
+    </div>
+
+    <div id="helpTooltip" style="display: none; position: absolute; top: 35px; right: 12px; width: 280px; padding: 16px; background: rgba(37, 37, 37, 0.75); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; color: var(--text-primary); z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.2); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <strong>使用说明</strong>
+            <button id="helpClose" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 18px; padding: 0; line-height: 1;">×</button>
+        </div>
+        <div style="color: var(--text-secondary); line-height: 1.6;">
+            · 从目标软件窗口进入插件，自动显示该软件快捷键<br><br>
+            · 未匹配的软件自动创建空条目，可导入或添加快捷键<br><br>
+            · 右键删除软件（内置软件仅隐藏，可通过更新恢复）<br><br>
+            · 所有快捷键均可编辑/删除<br><br>
+            · 直接按快捷键可跳转到对应记录
+        </div>
     </div>
 
     <div class="main-container">
         <div class="sidebar">
-            <div class="sidebar-header">软件</div>
+            <div class="sidebar-header">
+                软件
+            </div>
             <div class="software-list" id="softwareList">
                 <!-- Populated by JS -->
             </div>
@@ -862,75 +904,34 @@
     </div>
 
     <script>
-        // 内置快捷键数据
-        const shortcutsData = {
-            vscode: {
-                name: 'VSCode',
-                shortcuts: [
-                    { keys: ['Ctrl', 'Shift', 'P'], command: 'Command Palette', category: '常用', description: '打开命令面板' },
-                    { keys: ['Ctrl', 'P'], command: 'Quick Open', category: '常用', description: '快速打开文件' },
-                    { keys: ['Ctrl', 'Shift', 'N'], command: 'New Window', category: '常用', description: '新窗口' },
-                    { keys: ['Ctrl', 'W'], command: 'Close Window', category: '常用', description: '关闭窗口' },
-                    { keys: ['Ctrl', ','], command: 'Settings', category: '常用', description: '打开设置' },
-                    { keys: ['Ctrl', 'X'], command: 'Cut Line', category: '编辑', description: '剪切整行' },
-                    { keys: ['Ctrl', 'C'], command: 'Copy Line', category: '编辑', description: '复制整行' },
-                    { keys: ['Alt', 'Up'], command: 'Move Line Up', category: '编辑', description: '将行上移' },
-                    { keys: ['Alt', 'Down'], command: 'Move Line Down', category: '编辑', description: '将行下移' },
-                    { keys: ['Ctrl', 'Shift', 'K'], command: 'Delete Line', category: '编辑', description: '删除整行' },
-                    { keys: ['Ctrl', '/'], command: 'Toggle Comment', category: '编辑', description: '切换行注释' },
-                    { keys: ['Alt', 'Shift', 'A'], command: 'Block Comment', category: '编辑', description: '切换块注释' },
-                    { keys: ['Ctrl', 'F'], command: 'Find', category: '搜索', description: '查找' },
-                    { keys: ['Ctrl', 'H'], command: 'Replace', category: '搜索', description: '替换' },
-                    { keys: ['Ctrl', 'Shift', 'F'], command: 'Find in Files', category: '搜索', description: '在文件中查找' },
-                    { keys: ['F3'], command: 'Find Next', category: '搜索', description: '查找下一个' },
-                    { keys: ['Shift', 'F3'], command: 'Find Previous', category: '搜索', description: '查找上一个' },
-                    { keys: ['Ctrl', 'B'], command: 'Toggle Sidebar', category: '视图', description: '切换侧边栏' },
-                    { keys: ['Ctrl', 'J'], command: 'Toggle Panel', category: '视图', description: '切换面板' },
-                    { keys: ['Ctrl', '`'], command: 'Toggle Terminal', category: '视图', description: '切换终端' },
-                    { keys: ['Ctrl', 'K', 'Z'], command: 'Zen Mode', category: '视图', description: '进入禅模式' },
-                    { keys: ['Ctrl', '\\'], command: 'Split Editor', category: '编辑器', description: '拆分编辑器' },
-                    { keys: ['Ctrl', 'G'], command: 'Go to Line', category: '导航', description: '跳转到行' },
-                    { keys: ['Ctrl', 'Shift', 'O'], command: 'Go to Symbol', category: '导航', description: '跳转到符号' },
-                    { keys: ['Alt', 'Left'], command: 'Go Back', category: '导航', description: '后退' },
-                    { keys: ['Alt', 'Right'], command: 'Go Forward', category: '导航', description: '前进' },
-                    { keys: ['Ctrl', 'Tab'], command: 'Switch Tab', category: '编辑器', description: '切换标签页' },
-                    { keys: ['F2'], command: 'Rename Symbol', category: '编辑', description: '重命名符号' },
-                    { keys: ['Ctrl', 'Shift', 'L'], command: 'Select All Occurrences', category: '编辑', description: '选择所有匹配' },
-                    { keys: ['Ctrl', 'D'], command: 'Add Selection to Next Find', category: '编辑', description: '将选择添加到下一个查找' },
-                    { keys: ['Alt', 'Shift', 'F'], command: 'Format Document', category: '编辑', description: '格式化文档' },
-                ]
-            },
-            chrome: {
-                name: 'Chrome',
-                shortcuts: [
-                    { keys: ['Ctrl', 'T'], command: 'New Tab', category: '标签页', description: '打开新标签页' },
-                    { keys: ['Ctrl', 'W'], command: 'Close Tab', category: '标签页', description: '关闭当前标签页' },
-                    { keys: ['Ctrl', 'Shift', 'T'], command: 'Reopen Closed Tab', category: '标签页', description: '重新打开已关闭标签' },
-                    { keys: ['Ctrl', 'Tab'], command: 'Next Tab', category: '标签页', description: '切换到下一个标签' },
-                    { keys: ['Ctrl', 'Shift', 'Tab'], command: 'Previous Tab', category: '标签页', description: '切换到上一个标签' },
-                    { keys: ['Ctrl', 'L'], command: 'Address Bar', category: '导航', description: '跳转到地址栏' },
-                    { keys: ['F5'], command: 'Refresh', category: '导航', description: '刷新页面' },
-                    { keys: ['Ctrl', 'Shift', 'R'], command: 'Hard Refresh', category: '导航', description: '硬刷新（清除缓存）' },
-                    { keys: ['Alt', 'Left'], command: 'Go Back', category: '导航', description: '后退' },
-                    { keys: ['Alt', 'Right'], command: 'Go Forward', category: '导航', description: '前进' },
-                    { keys: ['Ctrl', 'D'], command: 'Bookmark', category: '书签', description: '收藏当前页' },
-                    { keys: ['Ctrl', 'H'], command: 'History', category: '历史', description: '显示历史记录' },
-                    { keys: ['Ctrl', 'J'], command: 'Downloads', category: '下载', description: '显示下载内容' },
-                    { keys: ['Ctrl', 'F'], command: 'Find', category: '页面', description: '在页面中查找' },
-                    { keys: ['Ctrl', '+'], command: 'Zoom In', category: '视图', description: '放大' },
-                    { keys: ['Ctrl', '-'], command: 'Zoom Out', category: '视图', description: '缩小' },
-                    { keys: ['Ctrl', '0'], command: 'Reset Zoom', category: '视图', description: '重置缩放' },
-                    { keys: ['F11'], command: 'Full Screen', category: '视图', description: '切换全屏' },
-                    { keys: ['Ctrl', 'Shift', 'I'], command: 'DevTools', category: '开发者', description: '打开开发者工具' },
-                    { keys: ['Ctrl', 'N'], command: 'New Window', category: '窗口', description: '打开新窗口' },
-                    { keys: ['Ctrl', 'Shift', 'N'], command: 'Incognito', category: '窗口', description: '打开无痕窗口' },
-                ]
-            }
-        };
+        // 主题模式：light / dark / system
+        let themeMode = localStorage.getItem('themeMode') || 'dark';
 
+        function applyTheme(mode) {
+            if (mode === 'light') {
+                document.documentElement.setAttribute('data-theme', 'light');
+                document.getElementById('themeToggle').textContent = '☀️';
+            } else {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                document.getElementById('themeToggle').textContent = '🌙';
+            }
+        }
+
+        function toggleTheme() {
+            themeMode = themeMode === 'dark' ? 'light' : 'dark';
+            localStorage.setItem('themeMode', themeMode);
+            applyTheme(themeMode);
+        }
+
+        document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+
+        // 初始化主题
+        applyTheme(themeMode);
+
+        // 仅自定义快捷键数据
+        let customShortcuts = {};
         let currentSoftware = null;
         let currentShortcuts = [];
-        let customShortcuts = {};
         let activeItem = null;
         let isRecording = false;  // 录制模式标志
 
@@ -940,23 +941,67 @@
         // 初始化
         function init() {
             utools.onPluginEnter(({ code, type, payload }) => {
-                if (utools.isDarkColors()) {
-                    document.body.classList.add('dark');
-                }
+                // 初始化主题
+                applyTheme(themeMode);
+
+                // 先填充列表
+                populateSoftwareList();
+                setupEventListeners();
+                loadCustomShortcuts().then(() => {
+                    const mapping = window.sukeyApi ? window.sukeyApi.loadSoftwareMapping() : { softwareMapping: {} };
+                    const softwareMapping = mapping.softwareMapping || {};
+
+                    // window 类型：自动选中对应软件
+                    if (type === 'window' && payload && payload.app) {
+                        const softwareKey = getSoftwareKeyFromProcess(payload.app, softwareMapping);
+                        if (softwareKey) {
+                            if (customShortcuts[softwareKey]) {
+                                selectSoftware(`custom_${softwareKey}`);
+                            } else {
+                                // 自动创建空条目
+                                const softwareName = capitalizeName(softwareKey);
+                                customShortcuts[softwareKey] = { name: softwareName, shortcuts: [] };
+                                saveShortcutToDb(softwareKey, customShortcuts[softwareKey]).then(() => {
+                                    populateSoftwareList();
+                                    selectSoftware(`custom_${softwareKey}`);
+                                });
+                            }
+                            return;
+                        }
+                    }
+
+                    // 默认：选中第一个软件
+                    const firstItem = document.querySelector('.software-item');
+                    if (firstItem) selectSoftware(firstItem.dataset.value);
+                    else showEmpty('选择软件查看快捷键', '或点击上方「导入快捷键」添加自定义数据');
+                });
             });
+        }
 
-            populateSoftwareList();
-            setupEventListeners();
-            loadCustomShortcuts();
-            setupKeyDetector();
+        // 进程名映射到软件 key（智能匹配）
+        function getSoftwareKeyFromProcess(processName, softwareMapping) {
+            // 移除 .exe 后缀，转小写
+            const name = processName.replace(/\.exe$/i, '').toLowerCase();
 
-            // 自动选中第一个软件
-            const firstItem = document.querySelector('.software-item');
-            if (firstItem) {
-                selectSoftware(firstItem.dataset.value);
-            } else {
-                showEmpty('选择软件查看快捷键', '或点击上方「导入快捷键」添加自定义数据');
+            // 1. 精确匹配（需要 mapping 配置）
+            if (softwareMapping && softwareMapping[name]) return softwareMapping[name];
+
+            // 2. 模糊匹配：进程名包含映射的 key，或 key 包含进程名
+            if (softwareMapping) {
+                for (const [key, value] of Object.entries(softwareMapping)) {
+                    if (name.includes(key) || key.includes(name)) {
+                        return value;
+                    }
+                }
             }
+
+            // 3. 直接使用进程名作为 key（兜底）
+            return name.replace(/\s+/g, '_');
+        }
+
+        // 首字母大写转换
+        function capitalizeName(name) {
+            return name.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
         }
 
         // 设置按键检测器
@@ -1129,11 +1174,7 @@
             const list = document.getElementById('softwareList');
             list.innerHTML = '';
 
-            Object.keys(shortcutsData).forEach(key => {
-                const item = createSoftwareItem(key, shortcutsData[key].name, key);
-                list.appendChild(item);
-            });
-
+            // 自定义软件
             Object.keys(customShortcuts).forEach(key => {
                 const item = createSoftwareItem(key, customShortcuts[key].name, `custom_${key}`);
                 list.appendChild(item);
@@ -1141,20 +1182,19 @@
         }
 
         function createSoftwareItem(key, name, value) {
+            console.log('[Sukey] createSoftwareItem:', { key, name, value });
             const div = document.createElement('div');
             div.className = `software-item ${key}`;
             div.dataset.value = value;
             div.innerHTML = `<span class="icon">${name.charAt(0)}</span>${name}`;
             div.addEventListener('click', () => selectSoftware(value));
 
-            // 右键菜单（仅自定义软件可删除）
-            if (value.startsWith('custom_')) {
-                div.addEventListener('contextmenu', (e) => {
-                    e.preventDefault();
-                    const key = value.replace('custom_', '');
-                    showDeleteDialog(key, name);
-                });
-            }
+            // 右键菜单（所有软件均可删除）
+            div.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                const softwareKey = value.startsWith('custom_') ? value.replace('custom_', '') : value;
+                showDeleteDialog(softwareKey, name);
+            });
             return div;
         }
 
@@ -1180,13 +1220,7 @@
                 data = customShortcuts[softwareKey];
             } else {
                 softwareKey = software;
-                // 如果内置软件已有自定义副本，优先使用自定义版本
-                if (customShortcuts[softwareKey]) {
-                    data = customShortcuts[softwareKey];
-                    software = `custom_${softwareKey}`;
-                } else {
-                    data = shortcutsData[software];
-                }
+                data = customShortcuts[softwareKey];
             }
 
             if (!data || !data.shortcuts) {
@@ -1202,7 +1236,6 @@
                 <span class="badge">${data.shortcuts.length} 个快捷键</span>
             `;
 
-            // 显示添加快捷键按钮
             const addBtn = document.getElementById('addShortcutBtn');
             addBtn.style.display = 'block';
 
@@ -1382,11 +1415,16 @@
 
         // 删除快捷键项
         async function deleteShortcutItem(softwareKey, shortcutIndex) {
-            // 如果是内置软件（softwareKey 不在 customShortcuts 中），需要先确保有自定义副本
+            // 内置软件需要先创建自定义副本
             if (!customShortcuts[softwareKey]) {
-                // 内置软件没有自定义副本，无法删除
-                alert('内置软件快捷键无法删除');
-                return;
+                if (shortcutsData[softwareKey]) {
+                    customShortcuts[softwareKey] = JSON.parse(JSON.stringify(shortcutsData[softwareKey]));
+                    await saveShortcutToDb(softwareKey, customShortcuts[softwareKey]);
+                    populateSoftwareList();
+                } else {
+                    alert('无法删除该软件的快捷键');
+                    return;
+                }
             }
             customShortcuts[softwareKey].shortcuts.splice(shortcutIndex, 1);
             await saveShortcutToDb(softwareKey, customShortcuts[softwareKey]);
@@ -1395,34 +1433,16 @@
 
         // 编辑快捷键项
         function editShortcutItem(softwareKey, shortcutIndex) {
-            // 检查是否有自定义副本，如果没有则创建
             if (!customShortcuts[softwareKey]) {
-                // 从内置数据创建自定义副本
-                let sourceData = null;
-                if (shortcutsData[softwareKey]) {
-                    sourceData = JSON.parse(JSON.stringify(shortcutsData[softwareKey]));
-                } else if (currentSoftware && currentSoftware.startsWith('custom_')) {
-                    // 已经是 custom_ 前缀的情况
-                    const key = currentSoftware.replace('custom_', '');
-                    sourceData = JSON.parse(JSON.stringify(customShortcuts[key]));
-                }
-
-                if (!sourceData) {
-                    alert('无法编辑该软件的快捷键');
-                    return;
-                }
-
-                // 创建自定义副本
-                customShortcuts[softwareKey] = sourceData;
-                saveShortcutToDb(softwareKey, customShortcuts[softwareKey]);
-                populateSoftwareList();
+                alert('无法编辑该软件的快捷键');
+                return;
             }
 
             const shortcuts = customShortcuts[softwareKey].shortcuts;
             const shortcut = shortcuts[shortcutIndex];
             if (!shortcut) return;
 
-            // 使用对话框编辑（代替 prompt）
+            // 使用对话框编辑
             showEditDialog(softwareKey, shortcutIndex, shortcut);
         }
 
@@ -1476,6 +1496,26 @@
 
             document.getElementById('importBtn').addEventListener('click', () => {
                 document.getElementById('importOverlay').classList.remove('hidden');
+            });
+
+            // 帮助按钮 tooltip（点击切换）
+            const helpBtn = document.getElementById('helpBtn');
+            const helpTooltip = document.getElementById('helpTooltip');
+            const helpClose = document.getElementById('helpClose');
+            helpBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isVisible = helpTooltip.style.display === 'block';
+                helpTooltip.style.display = isVisible ? 'none' : 'block';
+            });
+            helpClose.addEventListener('click', (e) => {
+                e.stopPropagation();
+                helpTooltip.style.display = 'none';
+            });
+            document.addEventListener('click', () => {
+                helpTooltip.style.display = 'none';
+            });
+            helpTooltip.addEventListener('click', (e) => {
+                e.stopPropagation();
             });
 
             document.getElementById('importClose').addEventListener('click', () => {
@@ -1562,7 +1602,7 @@
                 const key = name.toLowerCase().replace(/\s+/g, '_');
 
                 if (!customShortcuts[key]) {
-                    customShortcuts[key] = { name: name, shortcuts: [] };
+                    customShortcuts[key] = { name: capitalizeName(name), shortcuts: [] };
                     saveShortcutToDb(key, customShortcuts[key]);
                 }
 
@@ -1574,14 +1614,18 @@
             });
 
             // 删除对话框 - 确认
+            let isDeleting = false;
             document.getElementById('deleteDialogConfirm').addEventListener('click', () => {
-                if (pendingDeleteKey) {
+                if (pendingDeleteKey && !isDeleting) {
+                    isDeleting = true;
                     (async () => {
+                        // 从数据库删除
                         await deleteShortcutFromDb(pendingDeleteKey);
                         delete customShortcuts[pendingDeleteKey];
-                        pendingDeleteKey = null;
                         populateSoftwareList();
+                        pendingDeleteKey = null;
                         showEmpty('选择软件查看快捷键', '或点击上方「导入快捷键」添加自定义数据');
+                        isDeleting = false;
                     })();
                 }
                 document.getElementById('deleteDialog').classList.remove('show');
@@ -1636,6 +1680,7 @@
                 const input = document.getElementById('editKeys');
                 input.value = '';
                 input.placeholder = '按下按键...';
+                input.focus();
             }
 
             function stopRecording() {
@@ -1699,21 +1744,12 @@
 
             // 添加快捷键按钮
             document.getElementById('addShortcutBtn').addEventListener('click', () => {
-                const softwareKey = currentSoftware.startsWith('custom_')
-                    ? currentSoftware.replace('custom_', '')
-                    : currentSoftware;
-
-                // 如果是内置软件，需要先创建自定义副本
-                if (!currentSoftware.startsWith('custom_')) {
-                    if (!customShortcuts[softwareKey]) {
-                        const sourceData = JSON.parse(JSON.stringify(shortcutsData[softwareKey]));
-                        customShortcuts[softwareKey] = sourceData;
-                        saveShortcutToDb(softwareKey, customShortcuts[softwareKey]);
-                        populateSoftwareList();
-                    }
-                    // 切换到自定义版本
-                    selectSoftware(`custom_${softwareKey}`);
+                if (!currentSoftware || !currentSoftware.startsWith('custom_')) {
+                    alert('请先选择一个自定义软件');
+                    return;
                 }
+
+                const softwareKey = currentSoftware.replace('custom_', '');
 
                 // 清空表单并显示添加对话框
                 document.getElementById('editKeys').value = '';
@@ -1770,6 +1806,9 @@
 
             // 不自动关闭：只有点击 X、取消、确认按钮才关闭
         }
+
+        // 初始化按键检测器
+        setupKeyDetector();
 
         init();
     </script>

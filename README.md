@@ -2,125 +2,157 @@
 
 ## 概述
 
-Sukey 是一个 uTools 插件，用于管理各软件的快捷键。当识别到特定软件为主窗口时，自动显示该软件的快捷键列表，支持查询和按键搜索。
+Sukey 是一个 uTools 插件，用于管理各软件的快捷键。进入插件时自动识别当前前台窗口软件，跳转到对应快捷键列表；支持关键字搜索和按键搜索。
 
 ## 核心功能
 
-### 1. 软件识别
-- 通过 `window` 匹配指令识别当前活动软件
-- 显示对应软件的快捷键列表
-- 支持 VSCode、Chrome、Edge、Firefox 等主流软件
+### 1. 自动窗口识别
+- 进入插件时自动检测当前活动软件
+- 自动跳转到对应软件的快捷键列表
+- 未匹配的软件自动创建空条目，支持导入
 
-### 2. 快捷键存储
-- 按软件分类存储快捷键数据
-- 支持 JSON 格式导入导出
-- 内置常用软件快捷键数据
+### 2. 智能进程映射
+- 大小写不敏感精确匹配
+- 模糊匹配（进程名包含或被包含）
+- 完全未匹配的进程自动创建空条目
 
-### 3. 查询能力
-- 模糊搜索快捷键
-- 按功能描述搜索
-- 按按键组合搜索
+### 3. 快捷键存储
+- 内置 VSCode、Chrome 快捷键数据
+- 支持 JSON 格式导入自定义数据
+- 自定义数据保存在本地数据库
 
-### 4. 窗口自动切换
-- 自动识别当前活动窗口软件
-- 切换软件时自动更新快捷键列表
+### 4. 查询能力
+- 中英文模糊搜索
+- 按功能分类筛选
+- 直接按键跳转到对应记录
 
 ## 项目结构
 
 ```
 /sukey
-|-- plugin.json      # 插件配置
-|-- preload.js       # 预加载脚本（读取本地 JSON 数据）
-|-- index.html       # 主页面
-|-- logo.png         # 128x128 图标
-|-- data/            # 快捷键数据
-|   |-- vscode.json  # VSCode 快捷键
-|   |-- chrome.json  # Chrome 快捷键
+|-- plugin.json           # 插件配置
+|-- preload.js            # 预加载脚本（读取本地 JSON 数据）
+|-- index.html            # 主页面
+|-- logo.png              # 128x128 图标
+|-- data/                 # 配置文件
+|   |-- software-mapping.json  # 进程名映射配置
 ```
 
-## plugin.json 配置
+## 配置说明
+
+### 进程名映射 (data/software-mapping.json)
 
 ```json
 {
-  "main": "index.html",
-  "logo": "logo.png",
-  "preload": "preload.js",
-  "features": [
-    {
-      "code": "list",
-      "explain": "查看当前软件快捷键列表",
-      "cmds": [{
-        "type": "window",
-        "label": "快捷键列表",
-        "match": {
-          "app": ["Code.exe", "chrome.exe", "msedge.exe"]
-        }
-      }]
-    },
-    {
-      "code": "search",
-      "explain": "搜索快捷键",
-      "cmds": ["sk", "快捷键"]
+    "softwareMapping": {
+        "code": "vscode",
+        "chrome": "chrome",
+        "excel": "excel",
+        "obsidian": "obsidian"
     }
-  ]
+}
+```
+
+- 键为进程名（小写），值为软件标识
+- 可通过模糊匹配处理进程名差异
+- 不配置则使用进程名直接作为 key
+
+### plugin.json 配置
+
+```json
+{
+    "main": "index.html",
+    "logo": "logo.png",
+    "preload": "preload.js",
+    "features": [
+        {
+            "code": "list",
+            "explain": "快捷键列表 - 自动识别当前窗口软件",
+            "cmds": [
+                {
+                    "type": "window",
+                    "label": "快捷键列表",
+                    "match": {
+                        "app": ["Code.exe", "chrome.exe", "msedge.exe", "Obsidian.exe"]
+                    }
+                }
+            ]
+        },
+        {
+            "code": "search",
+            "explain": "搜索快捷键",
+            "cmds": ["sk", "快捷键"]
+        }
+    ],
+    "pluginSetting": {
+        "height": 500
+    }
 }
 ```
 
 ## 快捷键数据格式
 
+### 导入格式
 ```json
 {
-  "software": "VSCode",
-  "name": "Visual Studio Code",
-  "shortcuts": [
-    {
-      "keys": ["Ctrl", "Shift", "P"],
-      "command": "Command Palette",
-      "category": "常用",
-      "description": "打开命令面板"
-    }
-  ]
+    "software": "软件名称",
+    "shortcuts": [
+        {
+            "keys": ["Ctrl", "Shift", "P"],
+            "command": "命令名称",
+            "category": "分类",
+            "description": "描述说明"
+        }
+    ]
 }
 ```
 
-## 开发进度
+### 内置数据 (index.html 内联)
+```javascript
+const shortcutsData = {
+    vscode: {
+        name: 'VSCode',
+        shortcuts: [...]
+    }
+}
+```
 
-### Phase 1 - MVP ✅
-- [x] 项目初始化（目录结构）
-- [x] 插件配置（plugin.json）
-- [x] 预加载脚本（preload.js）
-- [x] 基础 UI（index.html + 暗色主题）
-- [x] VSCode 快捷键数据
-- [x] Chrome 快捷键数据
-- [x] Logo 生成
-- [x] 数据格式统一（description 字段）
-- [x] window 匹配配置扩展
-- [ ] 在开发者工具中调试
-- [ ] 窗口识别自动切换
+## 使用说明
 
-### Phase 2 - 增强
-- [ ] 添加更多软件（Photoshop, Firefox, Word 等）
-- [ ] 按键组合精确查找
-- [ ] 快捷键导入导出（JSON）
-- [ ] 显示/隐藏快捷键提示
+### 方式一：窗口匹配进入
+1. 在目标软件窗口（如 Obsidian）
+2. 按下 uTools 全局快捷键
+3. 选择「快捷键列表」
+4. 自动跳转到该软件的快捷键页面
 
-### Phase 3 - 完善
-- [ ] 用户自定义快捷键
-- [ ] 云同步
-- [ ] 快捷键冲突检测
+### 方式二：关键字搜索
+1. 按下 uTools 全局快捷键
+2. 输入 `sk` 或 `快捷键`
+3. 在列表中选择软件查看
 
-## 调试说明
+### 导入自定义快捷键
+1. 点击「导入快捷键」按钮
+2. 选择 JSON 文件或粘贴内容
+3. 数据自动保存到本地数据库
+
+## 开发调试
 
 1. 在 uTools 中安装「uTools 开发者工具」插件
-2. 打开开发者工具，点击「选择工程 plugin.json 文件夹」
-3. 选择 `D:\material\OneDrive\material\Sukey` 文件夹
-4. 在搜索框输入 `sk` 或 `快捷键` 启动插件
-5. 按 `Ctrl+Shift+I` 打开开发者工具进行调试
-6. 开启「退出到后台立即结束运行」实现热重载
+2. 打开开发者工具，选择 `D:\material\OneDrive\material\Sukey` 文件夹
+3. 在搜索框输入 `sk` 或 `快捷键` 启动插件
+4. 按 `F12` 打开开发者工具进行调试
+5. 修改代码后按 `Ctrl+Shift+P` 重新加载
 
-## 已知问题修复
+## 更新日志
 
-- [x] preload.js 未被使用 - 重构 index.html 使用 sukeyApi
-- [x] 数据格式不一致 - 统一使用 description 字段
-- [x] console.log 残留 - 已清理
-- [x] window 匹配配置 - 扩展更多进程名
+### 2026-05-30
+- 新增窗口自动识别功能
+- 新增进程名智能映射（精确/模糊匹配）
+- 新增未匹配软件自动创建空条目
+- 配置分离到 `data/software-mapping.json`
+- 清理调试日志
+
+### 早期版本
+- 项目初始化
+- 基础 UI 实现
+- VSCode/Chrome 快捷键数据

@@ -5,7 +5,7 @@
     "features": [
         {
             "code": "list",
-            "explain": "查看当前软件快捷键列表",
+            "explain": "快捷键列表 - 自动识别当前窗口软件",
             "cmds": [
                 {
                     "type": "window",
@@ -17,7 +17,24 @@
                             "msedge.exe",
                             "firefox.exe",
                             "notepad.exe",
-                            "explorer.exe"
+                            "explorer.exe",
+                            "Obsidian.exe",
+                            "Photoshop.exe",
+                            "Illustrator.exe",
+                            "Premiere Pro.exe",
+                            "After Effects.exe",
+                            "WINWORD.EXE",
+                            "EXCEL.EXE",
+                            "POWERPNT.EXE",
+                            "OUTLOOK.EXE",
+                            "QQ.exe",
+                            "WeChat.exe",
+                            "DingTalk.exe",
+                            "Feishu.exe",
+                            "Wolai.exe",
+                            "Notion.exe",
+                            "Figma.exe",
+                            "Sketch.exe.exe"
                         ]
                     }
                 }

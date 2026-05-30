@@ -7,6 +7,20 @@ const path = require('path');
 // 数据目录
 const dataDir = path.join(__dirname, 'data');
 
+// 读取软件映射配置
+function loadSoftwareMapping() {
+    try {
+        const filePath = path.join(dataDir, 'software-mapping.json');
+        if (fs.existsSync(filePath)) {
+            const content = fs.readFileSync(filePath, 'utf-8');
+            return JSON.parse(content);
+        }
+    } catch (err) {
+        // silent fail
+    }
+    return { softwareMapping: {} };
+}
+
 // 读取快捷键数据
 function loadShortcutData(software) {
     try {
@@ -29,7 +43,7 @@ function getAvailableSoftware() {
         }
         const files = fs.readdirSync(dataDir);
         return files
-            .filter(f => f.endsWith('.json'))
+            .filter(f => f.endsWith('.json') && f !== 'software-mapping.json')
             .map(f => f.replace('.json', ''));
     } catch (err) {
         return [];
@@ -39,5 +53,6 @@ function getAvailableSoftware() {
 // 导出 API
 window.sukeyApi = {
     loadShortcutData,
+    loadSoftwareMapping,
     getAvailableSoftware
 };

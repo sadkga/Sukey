@@ -1,0 +1,28 @@
+{
+    "softwareMapping": {
+        "code": "vscode",
+        "chrome": "chrome",
+        "msedge": "edge",
+        "firefox": "firefox",
+        "notepad": "notepad",
+        "explorer": "explorer",
+        "obsidian": "obsidian",
+        "photoshop": "photoshop",
+        "photoshopapp": "photoshop",
+        "illustrator": "illustrator",
+        "premiere pro": "premiere",
+        "after effects": "aftereffects",
+        "winword": "word",
+        "excel": "excel",
+        "powerpnt": "powerpoint",
+        "outlook": "outlook",
+        "qq": "qq",
+        "wechat": "wechat",
+        "dingtalk": "dingtalk",
+        "feishu": "feishu",
+        "wolai": "wolai",
+        "notion": "notion",
+        "figma": "figma",
+        "sketch": "sketch"
+    }
+}
