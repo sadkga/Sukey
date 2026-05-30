@@ -1182,7 +1182,6 @@
         }
 
         function createSoftwareItem(key, name, value) {
-            console.log('[Sukey] createSoftwareItem:', { key, name, value });
             const div = document.createElement('div');
             div.className = `software-item ${key}`;
             div.dataset.value = value;
@@ -1415,16 +1414,9 @@
 
         // 删除快捷键项
         async function deleteShortcutItem(softwareKey, shortcutIndex) {
-            // 内置软件需要先创建自定义副本
             if (!customShortcuts[softwareKey]) {
-                if (shortcutsData[softwareKey]) {
-                    customShortcuts[softwareKey] = JSON.parse(JSON.stringify(shortcutsData[softwareKey]));
-                    await saveShortcutToDb(softwareKey, customShortcuts[softwareKey]);
-                    populateSoftwareList();
-                } else {
-                    alert('无法删除该软件的快捷键');
-                    return;
-                }
+                alert('无法删除该软件的快捷键');
+                return;
             }
             customShortcuts[softwareKey].shortcuts.splice(shortcutIndex, 1);
             await saveShortcutToDb(softwareKey, customShortcuts[softwareKey]);
