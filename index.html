@@ -25,6 +25,8 @@
             --keys-color: #9cdcfe;
             --keys-bg: #3c3c3c;
             --font-mono: 'Cascadia Code', 'Fira Code', Consolas, 'SF Mono', monospace;
+            --danger: #f44336;
+            --danger-hover: #d32f2f;
         }
 
         [data-theme="light"] {
@@ -136,9 +138,8 @@
             font-size: 10px;
             font-weight: bold;
             color: #fff;
+            background: var(--text-secondary);
         }
-
-        .software-item .icon { background: var(--text-secondary); }
 
         /* Content Area */
         .content {
@@ -489,7 +490,7 @@
         }
 
         .context-menu-item.danger {
-            color: #f44336;
+            color: var(--danger);
         }
 
         /* Floating Dialog */
@@ -578,13 +579,13 @@
         }
 
         .float-dialog-footer .btn-danger {
-            background: #f44336;
+            background: var(--danger);
             border: none;
             color: #fff;
         }
 
         .float-dialog-footer .btn-danger:hover {
-            background: #d32f2f;
+            background: var(--danger-hover);
         }
 
         .float-dialog-footer .btn-primary {
@@ -633,6 +634,48 @@
 
         .form-row .form-field {
             flex: 1;
+        }
+
+        /* Toast */
+        .toast-container {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 3000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+
+        .toast {
+            padding: 10px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            transition: opacity 0.2s, transform 0.2s;
+            transform: translateY(8px);
+            pointer-events: auto;
+            max-width: 480px;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .toast.error {
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+
+        .toast.success {
+            border-color: var(--accent);
         }
     </style>
 </head>
@@ -903,646 +946,1032 @@
         </div>
     </div>
 
+    <!-- Toast 容器 -->
+    <div class="toast-container" id="toastContainer"></div>
+
     <script>
-        // 主题模式：light / dark / system
-        let themeMode = localStorage.getItem('themeMode') || 'dark';
+    /* =====================================================================
+     * Sukey - 快捷键管理
+     * v2 重构: 全部逻辑收进 IIFE 命名空间 window.Sukey
+     * - 纯函数: KeyMap / Validator / Html(可在 tests/sukey-pure.js 单测)
+     * - 副作用: Store(utools.db) / UI(渲染/对话框/toast) / Recorder / Search
+     * - 死代码已清理(activeItem / getKeyName)
+     * - 所有用户输入走 Html.escape,防 XSS
+     * - silent fail 改为 console.error + toast 可见提示
+     * ===================================================================== */
+    (function() {
+        'use strict';
 
-        function applyTheme(mode) {
-            if (mode === 'light') {
-                document.documentElement.setAttribute('data-theme', 'light');
-                document.getElementById('themeToggle').textContent = '☀️';
-            } else {
-                document.documentElement.setAttribute('data-theme', 'dark');
-                document.getElementById('themeToggle').textContent = '🌙';
+        // ============================================================
+        // KeyMap — 物理按键与显示名互转(纯函数)
+        // ============================================================
+        const KeyMap = {
+            toDisplay(key, code) {
+                if (key === 'Control') return 'Ctrl';
+                if (key === 'Alt') return 'Alt';
+                if (key === 'Shift') return 'Shift';
+                if (key === 'Meta') return 'Meta';
+                if (code === 'Space' || key === ' ') return 'Space';
+                if (code === 'Enter') return 'Enter';
+                if (code === 'Escape') return 'Esc';
+                if (code === 'Backspace') return 'Backspace';
+                if (code === 'Tab') return 'Tab';
+                if (typeof code === 'string' && code.startsWith('Arrow')) return code.slice(5);
+                if (typeof key === 'string' && key.length === 1) return key.toUpperCase();
+                if (typeof key === 'string' && key.startsWith('F') && key.length <= 4) return key;
+                return null;
+            },
+
+            normalize(keyStr) {
+                if (typeof keyStr !== 'string' || !keyStr) return '';
+                const alias = {
+                    ctrl: 'Ctrl', control: 'Ctrl',
+                    alt: 'Alt',
+                    shift: 'Shift',
+                    meta: 'Meta', cmd: 'Meta', win: 'Meta',
+                    esc: 'Esc', escape: 'Esc',
+                    space: 'Space',
+                    enter: 'Enter', return: 'Enter',
+                    tab: 'Tab',
+                    backspace: 'Backspace',
+                    up: 'Up', down: 'Down', left: 'Left', right: 'Right'
+                };
+                return keyStr
+                    .split('+')
+                    .map(k => {
+                        const trimmed = k.trim();
+                        if (!trimmed) return null;
+                        const lower = trimmed.toLowerCase();
+                        if (alias[lower]) return alias[lower];
+                        if (trimmed.length === 1) return trimmed.toUpperCase();
+                        if (/^f\d+$/i.test(trimmed)) return trimmed.toUpperCase();
+                        return trimmed;
+                    })
+                    .filter(Boolean)
+                    .join('+');
+            },
+
+            toMatchString(keys) {
+                if (!Array.isArray(keys)) return '';
+                return keys.map(k => String(k).toLowerCase()).join('+');
             }
-        }
+        };
 
-        function toggleTheme() {
-            themeMode = themeMode === 'dark' ? 'light' : 'dark';
-            localStorage.setItem('themeMode', themeMode);
-            applyTheme(themeMode);
-        }
-
-        document.getElementById('themeToggle').addEventListener('click', toggleTheme);
-
-        // 初始化主题
-        applyTheme(themeMode);
-
-        // 仅自定义快捷键数据
-        let customShortcuts = {};
-        let currentSoftware = null;
-        let currentShortcuts = [];
-        let activeItem = null;
-        let isRecording = false;  // 录制模式标志
-
-        // 当前按下的键组合
-        let currentCombo = [];
-
-        // 初始化
-        function init() {
-            utools.onPluginEnter(({ code, type, payload }) => {
-                // 初始化主题
-                applyTheme(themeMode);
-
-                // 先填充列表
-                populateSoftwareList();
-                setupEventListeners();
-                loadCustomShortcuts().then(() => {
-                    const mapping = window.sukeyApi ? window.sukeyApi.loadSoftwareMapping() : { softwareMapping: {} };
-                    const softwareMapping = mapping.softwareMapping || {};
-
-                    // window 类型：自动选中对应软件
-                    if (type === 'window' && payload && payload.app) {
-                        const softwareKey = getSoftwareKeyFromProcess(payload.app, softwareMapping);
-                        if (softwareKey) {
-                            if (customShortcuts[softwareKey]) {
-                                selectSoftware(`custom_${softwareKey}`);
-                            } else {
-                                // 自动创建空条目
-                                const softwareName = capitalizeName(softwareKey);
-                                customShortcuts[softwareKey] = { name: softwareName, shortcuts: [] };
-                                saveShortcutToDb(softwareKey, customShortcuts[softwareKey]).then(() => {
-                                    populateSoftwareList();
-                                    selectSoftware(`custom_${softwareKey}`);
-                                });
-                            }
-                            return;
-                        }
+        // ============================================================
+        // Validator — 校验(纯函数)
+        // ============================================================
+        const Validator = {
+            validateImportData(data) {
+                const errors = [];
+                if (!data || typeof data !== 'object' || Array.isArray(data)) {
+                    return { valid: false, errors: ['数据必须是 JSON 对象'] };
+                }
+                if (typeof data.software !== 'string' || !data.software.trim()) {
+                    errors.push('缺少 software 字段或为空字符串');
+                }
+                if (!Array.isArray(data.shortcuts)) {
+                    errors.push('shortcuts 字段必须是数组');
+                    return { valid: false, errors };
+                }
+                if (data.shortcuts.length === 0) {
+                    errors.push('shortcuts 数组为空,至少需要一条快捷键');
+                }
+                data.shortcuts.forEach((s, i) => {
+                    const idx = i + 1;
+                    if (!s || typeof s !== 'object' || Array.isArray(s)) {
+                        errors.push(`第 ${idx} 项不是对象`);
+                        return;
                     }
-
-                    // 默认：选中第一个软件
-                    const firstItem = document.querySelector('.software-item');
-                    if (firstItem) selectSoftware(firstItem.dataset.value);
-                    else showEmpty('选择软件查看快捷键', '或点击上方「导入快捷键」添加自定义数据');
+                    if (!Array.isArray(s.keys) || s.keys.length === 0) {
+                        errors.push(`第 ${idx} 项 keys 缺失或为空数组`);
+                    } else if (s.keys.some(k => typeof k !== 'string' || !k)) {
+                        errors.push(`第 ${idx} 项 keys 包含非字符串或空值`);
+                    }
+                    if (typeof s.command !== 'string' || !s.command.trim()) {
+                        errors.push(`第 ${idx} 项 command 缺失或为空`);
+                    }
                 });
-            });
-        }
+                return { valid: errors.length === 0, errors };
+            },
 
-        // 进程名映射到软件 key（智能匹配）
-        function getSoftwareKeyFromProcess(processName, softwareMapping) {
-            // 移除 .exe 后缀，转小写
-            const name = processName.replace(/\.exe$/i, '').toLowerCase();
+            sanitizeShortcut(s) {
+                const safeObj = (s && typeof s === 'object' && !Array.isArray(s)) ? s : {};
+                const keys = Array.isArray(safeObj.keys)
+                    ? safeObj.keys.filter(k => typeof k === 'string' && k)
+                    : [];
+                return {
+                    keys,
+                    command: typeof safeObj.command === 'string' && safeObj.command.trim()
+                        ? safeObj.command : 'Unknown',
+                    category: typeof safeObj.category === 'string' && safeObj.category.trim()
+                        ? safeObj.category : '其他',
+                    description: typeof safeObj.description === 'string' ? safeObj.description : ''
+                };
+            },
 
-            // 1. 精确匹配（需要 mapping 配置）
-            if (softwareMapping && softwareMapping[name]) return softwareMapping[name];
+            isValidSoftwareKey(key) {
+                return typeof key === 'string' && key.length > 0 && key.length <= 64;
+            }
+        };
 
-            // 2. 模糊匹配：进程名包含映射的 key，或 key 包含进程名
-            if (softwareMapping) {
-                for (const [key, value] of Object.entries(softwareMapping)) {
-                    if (name.includes(key) || key.includes(name)) {
-                        return value;
+        // ============================================================
+        // Html — 转义工具(纯函数,核心 XSS 防线)
+        // ============================================================
+        const Html = {
+            escape(s) {
+                if (s == null) return '';
+                return String(s)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+        };
+
+        // ============================================================
+        // Toast — 非阻塞提示
+        // ============================================================
+        const Toast = {
+            show(message, type = 'info', duration = 3000) {
+                const container = document.getElementById('toastContainer');
+                if (!container) return;
+                const el = document.createElement('div');
+                el.className = `toast ${type}`;
+                el.textContent = message;
+                container.appendChild(el);
+                // 触发动画
+                requestAnimationFrame(() => el.classList.add('show'));
+                setTimeout(() => {
+                    el.classList.remove('show');
+                    setTimeout(() => el.remove(), 200);
+                }, duration);
+            },
+            error(message) { this.show(message, 'error', 4000); },
+            success(message) { this.show(message, 'success', 2500); }
+        };
+
+        // ============================================================
+        // Store — utools.db 持久化 + 内存态
+        // ============================================================
+        const Store = (function() {
+            let customShortcuts = {};
+            const locks = new Set();
+
+            function docId(key) { return `custom_${key}`; }
+
+            async function loadAll() {
+                try {
+                    const result = await utools.db.allDocs();
+                    customShortcuts = {};
+                    if (Array.isArray(result)) {
+                        result.forEach(doc => {
+                            if (doc._id && doc._id.startsWith('custom_') && doc.data) {
+                                const key = doc._id.replace('custom_', '');
+                                customShortcuts[key] = doc.data;
+                            }
+                        });
                     }
+                    return customShortcuts;
+                } catch (err) {
+                    console.error('[Sukey] 加载自定义快捷键失败:', err);
+                    Toast.error('加载数据失败,请检查 uTools 数据库');
+                    return {};
                 }
             }
 
-            // 3. 直接使用进程名作为 key（兜底）
-            return name.replace(/\s+/g, '_');
-        }
+            async function save(key, data) {
+                if (!Validator.isValidSoftwareKey(key)) {
+                    Toast.error('软件 key 不合法');
+                    return false;
+                }
+                try {
+                    const id = docId(key);
+                    let existing = null;
+                    try {
+                        existing = await utools.db.get(id);
+                    } catch (e) {
+                        // 文档不存在
+                    }
+                    if (existing) {
+                        await utools.db.put({ _id: id, _rev: existing._rev, data });
+                    } else {
+                        await utools.db.put({ _id: id, data });
+                    }
+                    return true;
+                } catch (err) {
+                    console.error(`[Sukey] 保存 ${key} 失败:`, err);
+                    Toast.error(`保存失败: ${err.message || err}`);
+                    return false;
+                }
+            }
 
-        // 首字母大写转换
-        function capitalizeName(name) {
-            return name.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-        }
+            async function remove(key) {
+                if (locks.has(key)) {
+                    Toast.error('删除正在进行中');
+                    return false;
+                }
+                locks.add(key);
+                try {
+                    const id = docId(key);
+                    const doc = await utools.db.get(id);
+                    await utools.db.remove(doc);
+                    delete customShortcuts[key];
+                    return true;
+                } catch (err) {
+                    if (err && (err.status === 404 || err.name === 'not_found')) {
+                        // 文档已不存在,视为成功
+                        delete customShortcuts[key];
+                        return true;
+                    }
+                    console.error(`[Sukey] 删除 ${key} 失败:`, err);
+                    Toast.error(`删除失败: ${err.message || err}`);
+                    return false;
+                } finally {
+                    locks.delete(key);
+                }
+            }
 
-        // 设置按键检测器
-        function setupKeyDetector() {
-            // comboTimeout 在外层声明
+            function getAll() { return customShortcuts; }
+            function get(key) { return customShortcuts[key]; }
+            function setLocal(key, data) { customShortcuts[key] = data; }
+
+            return { loadAll, save, remove, getAll, get, setLocal };
+        })();
+
+        // ============================================================
+        // 主题
+        // ============================================================
+        const Theme = (function() {
+            let mode = localStorage.getItem('themeMode') || 'dark';
+
+            function apply() {
+                if (mode === 'light') {
+                    document.documentElement.setAttribute('data-theme', 'light');
+                    const t = document.getElementById('themeToggle');
+                    if (t) t.textContent = '☀️';
+                } else {
+                    document.documentElement.removeAttribute('data-theme');
+                    const t = document.getElementById('themeToggle');
+                    if (t) t.textContent = '🌙';
+                }
+            }
+
+            function toggle() {
+                mode = mode === 'dark' ? 'light' : 'dark';
+                localStorage.setItem('themeMode', mode);
+                apply();
+            }
+
+            return { apply, toggle, getMode: () => mode };
+        })();
+
+        // ============================================================
+        // UI — 渲染、对话框
+        // ============================================================
+        const UI = (function() {
+            // ---- 内部状态(本模块闭包内) ----
+            let currentSoftware = null;
+            let currentShortcuts = [];
+            let pendingDeleteKey = null;
+
+            // ---- 辅助 ----
+            function setText(id, text) {
+                const el = document.getElementById(id);
+                if (el) el.textContent = text == null ? '' : String(text);
+            }
+
+            function capitalizeName(name) {
+                return name.replace(/_/g, ' ').split(' ').map(w =>
+                    w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+            }
+
+            // ---- 软件列表 ----
+            function populateSoftwareList() {
+                const list = document.getElementById('softwareList');
+                if (!list) return;
+                const frag = document.createDocumentFragment();
+                Object.keys(Store.getAll()).forEach(key => {
+                    const data = Store.get(key);
+                    if (!data) return;
+                    const div = document.createElement('div');
+                    div.className = `software-item ${key}`;
+                    div.dataset.value = `custom_${key}`;
+                    // 安全: name.charAt(0) 和 name 都走 escape
+                    const safeName = Html.escape(data.name);
+                    const safeInitial = Html.escape((data.name || '?').charAt(0));
+                    div.innerHTML = `<span class="icon">${safeInitial}</span>${safeName}`;
+                    div.addEventListener('click', () => selectSoftware(`custom_${key}`));
+                    div.addEventListener('contextmenu', (e) => {
+                        e.preventDefault();
+                        showDeleteDialog(key, data.name);
+                    });
+                    frag.appendChild(div);
+                });
+                list.replaceChildren(frag);
+            }
+
+            // ---- 选择软件 ----
+            function selectSoftware(software) {
+                document.querySelectorAll('.software-item').forEach(item => {
+                    item.classList.toggle('active', item.dataset.value === software);
+                });
+
+                let data = null;
+                let softwareKey = null;
+
+                if (software.startsWith('custom_')) {
+                    softwareKey = software.replace('custom_', '');
+                    data = Store.get(softwareKey);
+                } else {
+                    softwareKey = software;
+                    data = Store.get(softwareKey);
+                }
+
+                if (!data || !Array.isArray(data.shortcuts)) {
+                    showEmpty('暂无数据');
+                    return;
+                }
+
+                currentSoftware = software;
+                currentShortcuts = data.shortcuts;
+
+                const titleEl = document.getElementById('softwareTitle');
+                if (titleEl) {
+                    titleEl.textContent = '';
+                    const nameNode = document.createTextNode(data.name || '?');
+                    titleEl.appendChild(nameNode);
+                    const badge = document.createElement('span');
+                    badge.className = 'badge';
+                    badge.textContent = `${data.shortcuts.length} 个快捷键`;
+                    titleEl.appendChild(badge);
+                }
+
+                const addBtn = document.getElementById('addShortcutBtn');
+                if (addBtn) addBtn.style.display = 'block';
+
+                populateCategorySelect(data.shortcuts);
+                renderShortcuts(data.shortcuts);
+            }
+
+            // ---- 填充分类选择(用 DocumentFragment,O(n) 而非 O(n²)) ----
+            function populateCategorySelect(shortcuts) {
+                const select = document.getElementById('categorySelect');
+                if (!select) return;
+                const categories = [...new Set(
+                    shortcuts.map(s => s.category).filter(c => typeof c === 'string' && c)
+                )].sort();
+                const frag = document.createDocumentFragment();
+                frag.appendChild(new Option('全部分类', ''));
+                categories.forEach(cat => frag.appendChild(new Option(cat, cat)));
+                select.replaceChildren(frag);
+            }
+
+            // ---- 筛选 ----
+            function filterShortcuts(keyword, category) {
+                let filtered = currentShortcuts;
+
+                if (keyword && typeof keyword === 'string' && keyword.trim()) {
+                    const kw = keyword.toLowerCase().trim();
+                    filtered = filtered.filter(s => {
+                        const commandMatch = (s.command || '').toLowerCase().includes(kw);
+                        const descMatch = (s.description || '').toLowerCase().includes(kw);
+                        const keysMatch = (Array.isArray(s.keys) ? s.keys.join('+') : '').toLowerCase().includes(kw);
+                        const catMatch = (s.category || '').toLowerCase().includes(kw);
+                        return commandMatch || descMatch || keysMatch || catMatch;
+                    });
+                }
+
+                if (category) {
+                    filtered = filtered.filter(s => s.category === category);
+                }
+
+                // 保留原始索引(用于编辑/删除)
+                filtered = filtered.map((s) => {
+                    const originalIdx = currentShortcuts.indexOf(s);
+                    return { ...s, _origIdx: originalIdx };
+                });
+
+                renderShortcuts(filtered);
+            }
+
+            // ---- 渲染快捷键列表 ----
+            function renderShortcuts(shortcuts) {
+                const container = document.getElementById('shortcutList');
+                if (!container) return;
+
+                if (!shortcuts || shortcuts.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <div class="icon">⌨️</div>
+                            <div class="title">没有找到匹配的快捷键</div>
+                            <div class="desc">尝试其他关键词或分类</div>
+                        </div>`;
+                    return;
+                }
+
+                const canEdit = currentSoftware !== null;
+                const isCustom = currentSoftware && currentSoftware.startsWith('custom_');
+                const softwareKey = isCustom ? currentSoftware.replace('custom_', '') : null;
+
+                // 按分类分组
+                const grouped = {};
+                shortcuts.forEach((s, idx) => {
+                    const cat = s.category || '其他';
+                    if (!grouped[cat]) grouped[cat] = [];
+                    const hasExplicit = Object.prototype.hasOwnProperty.call(s, '_origIdx');
+                    const origIdx = hasExplicit ? s._origIdx : idx;
+                    grouped[cat].push({ ...s, _origIdx: origIdx });
+                });
+
+                const parts = [];
+                Object.keys(grouped).sort().forEach(category => {
+                    const safeCat = Html.escape(category);
+                    let groupHtml = `<div class="category-group">
+                        <div class="category-header">${safeCat}</div>`;
+                    grouped[category].forEach((s) => {
+                        const safeKeys = Html.escape((Array.isArray(s.keys) ? s.keys : []).join('+'));
+                        const safeCmd = Html.escape(s.command || '');
+                        const safeDesc = Html.escape(s.description || '');
+                        // 数字索引可直接嵌入,key 用 escape 后即使含特殊字符也安全
+                        const idxSafe = Number.isInteger(s._origIdx) ? s._origIdx : -1;
+                        const keySafe = softwareKey ? Html.escape(softwareKey) : '';
+                        const editBtn = canEdit
+                            ? `<span class="item-actions">
+                                <button class="action-btn" data-action="edit" data-key="${keySafe}" data-idx="${idxSafe}" title="编辑">✏️</button>
+                                <button class="action-btn" data-action="delete" data-key="${keySafe}" data-idx="${idxSafe}" title="删除">🗑️</button>
+                            </span>`
+                            : '';
+                        groupHtml += `
+                            <div class="shortcut-item">
+                                <span class="keys">${safeKeys}</span>
+                                <span class="command">${safeCmd}</span>
+                                <span class="description">${safeDesc}</span>
+                                ${editBtn}
+                            </div>`;
+                    });
+                    groupHtml += '</div>';
+                    parts.push(groupHtml);
+                });
+                container.innerHTML = parts.join('');
+
+                // 事件委托(取代内联 onclick)
+                container.querySelectorAll('.action-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const action = btn.dataset.action;
+                        const key = btn.dataset.key;
+                        const idx = parseInt(btn.dataset.idx, 10);
+                        if (action === 'edit') Actions.editShortcut(key, idx);
+                        else if (action === 'delete') Actions.deleteShortcut(key, idx);
+                    });
+                });
+            }
+
+            // ---- 空状态 ----
+            function showEmpty(title, desc) {
+                const container = document.getElementById('shortcutList');
+                if (!container) return;
+                const safeTitle = Html.escape(title || '选择软件查看快捷键');
+                const safeDesc = Html.escape(desc || '或点击上方「导入快捷键」添加自定义数据');
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">⌨️</div>
+                        <div class="title">${safeTitle}</div>
+                        <div class="desc">${safeDesc}</div>
+                    </div>`;
+            }
+
+            // ---- 对话框 ----
+            function showDeleteDialog(softwareKey, softwareName) {
+                pendingDeleteKey = softwareKey;
+                setText('deleteDialogText', `确定删除「${softwareName || softwareKey}」及其所有快捷键?`);
+                const dlg = document.getElementById('deleteDialog');
+                if (dlg) dlg.classList.add('show');
+            }
+
+            function closeDeleteDialog() {
+                pendingDeleteKey = null;
+                const dlg = document.getElementById('deleteDialog');
+                if (dlg) dlg.classList.remove('show');
+            }
+
+            function getPendingDeleteKey() { return pendingDeleteKey; }
+            function clearPendingDelete() { pendingDeleteKey = null; }
+
+            function getCurrentSoftware() { return currentSoftware; }
+            function getCurrentShortcuts() { return currentShortcuts; }
+            function setCurrentShortcuts(arr) { currentShortcuts = arr; }
+
+            return {
+                populateSoftwareList,
+                selectSoftware,
+                populateCategorySelect,
+                filterShortcuts,
+                renderShortcuts,
+                showEmpty,
+                showDeleteDialog,
+                closeDeleteDialog,
+                getPendingDeleteKey,
+                clearPendingDelete,
+                getCurrentSoftware,
+                getCurrentShortcuts,
+                setCurrentShortcuts,
+                capitalizeName
+            };
+        })();
+
+        // ============================================================
+        // Recorder — 快捷键录制
+        // ============================================================
+        const Recorder = (function() {
+            let isRecording = false;
+            let recordedKeys = [];
+
+            function setRecordBtnState(recording) {
+                const icon = document.getElementById('recordIcon');
+                const text = document.getElementById('recordText');
+                const btn = document.getElementById('recordKeyBtn');
+                const input = document.getElementById('editKeys');
+                if (!icon || !text || !btn || !input) return;
+                if (recording) {
+                    icon.textContent = '⏸';
+                    icon.style.color = '#fff';
+                    text.style.color = '#fff';
+                    btn.style.background = 'var(--accent)';
+                    text.textContent = '暂停';
+                    input.value = '';
+                    input.placeholder = '按下按键...';
+                    input.focus();
+                } else {
+                    icon.textContent = '▶';
+                    icon.style.color = 'var(--accent)';
+                    text.style.color = 'var(--text-primary)';
+                    btn.style.background = 'transparent';
+                    text.textContent = '录制';
+                    input.placeholder = '按下录制按钮后按键';
+                }
+            }
+
+            function start() {
+                isRecording = true;
+                recordedKeys = [];
+                setRecordBtnState(true);
+            }
+
+            function stop() {
+                isRecording = false;
+                setRecordBtnState(false);
+            }
+
+            function toggle() {
+                if (isRecording) stop();
+                else start();
+            }
+
+            function isActive() { return isRecording; }
+
+            function handleEditKeysKeydown(e) {
+                if (!isRecording) return false;
+                e.stopPropagation();
+                e.preventDefault();
+                if (e.key === 'Escape') {
+                    stop();
+                    return true;
+                }
+                const display = KeyMap.toDisplay(e.key, e.code);
+                if (display && !recordedKeys.includes(display)) {
+                    recordedKeys.push(display);
+                }
+                const input = document.getElementById('editKeys');
+                if (input) input.value = recordedKeys.join('+');
+                return true;
+            }
+
+            function handleEditKeysInput(input) {
+                if (isRecording) return;
+                if (!input.value) return;
+                const parts = input.value.split('+');
+                if (parts.length > 1 || input.value.endsWith('+')) {
+                    input.value = KeyMap.normalize(input.value);
+                }
+            }
+
+            return { start, stop, toggle, isActive, handleEditKeysKeydown, handleEditKeysInput };
+        })();
+
+        // ============================================================
+        // Search — 全局按键搜索(全局快捷键命中快捷键记录)
+        // ============================================================
+        const Search = (function() {
+            let currentCombo = [];
             let comboTimeout = null;
-            const comboDisplay = document.getElementById('keyComboDisplay');
 
-            const handleKeyDown = (e) => {
-                // 跳过输入框中的按键（让输入框正常工作）
-                if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') {
-                    return;
-                }
+            function handleGlobalKey(e) {
+                // 输入框/select/textarea 跳过
+                const tag = e.target && e.target.tagName;
+                if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+                // 录制中跳过
+                if (Recorder.isActive()) return;
+                // 对话框打开时跳过
+                if (!document.getElementById('importOverlay').classList.contains('hidden')) return;
+                if (document.querySelector('.float-dialog.show')) return;
 
-                // 录制模式时不处理全局按键（避免触发搜索）
-                if (isRecording) {
-                    return;
-                }
-
-                // 如果有对话框打开（导入、添加软件等），不处理全局按键
-                if (!document.getElementById('importOverlay').classList.contains('hidden')) {
-                    return;
-                }
-                if (document.querySelector('.float-dialog.show')) {
-                    return;
-                }
-
-                // 获取按键名称
-                let keyName = null;
-                if (e.key === 'Control') keyName = 'Ctrl';
-                else if (e.key === 'Alt') keyName = 'Alt';
-                else if (e.key === 'Shift') keyName = 'Shift';
-                else if (e.key === 'Meta') keyName = 'Meta';
-                else if (e.code === 'Space') keyName = 'Space';
-                else if (e.code === 'Enter') keyName = 'Enter';
-                else if (e.code === 'Escape') {
-                    // 关闭任何打开的对话框
+                if (e.code === 'Escape') {
                     document.querySelectorAll('.float-dialog.show').forEach(d => d.classList.remove('show'));
                     return;
                 }
-                else if (e.key.length === 1) keyName = e.key.toUpperCase();
-                else if (e.key.startsWith('F') && e.key.length <= 4) keyName = e.key;
 
-                if (!keyName) return;
+                const display = KeyMap.toDisplay(e.key, e.code);
+                if (!display) return;
 
-                // 阻止浏览器默认行为
                 e.preventDefault();
                 e.stopPropagation();
 
-                // 清除超时
                 if (comboTimeout) clearTimeout(comboTimeout);
 
-                // 添加到当前组合（避免重复）
-                if (!currentCombo.includes(keyName)) {
-                    currentCombo.push(keyName);
+                if (!currentCombo.includes(display)) {
+                    currentCombo.push(display);
                 }
 
-                // 实时显示当前按下的组合
+                const comboDisplay = document.getElementById('keyComboDisplay');
                 if (comboDisplay) {
                     comboDisplay.textContent = currentCombo.join(' + ');
                     comboDisplay.style.display = 'inline';
                 }
 
-                // 设置新的超时
                 comboTimeout = setTimeout(() => {
                     if (currentCombo.length > 0) {
                         matchKeys([...currentCombo]);
                     }
                     currentCombo = [];
-                    if (comboDisplay) {
-                        comboDisplay.style.display = 'none';
-                    }
+                    if (comboDisplay) comboDisplay.style.display = 'none';
                 }, 600);
-            };
-
-            document.addEventListener('keydown', handleKeyDown, true);
-        }
-
-        // 获取按键名称
-        function getKeyName(e) {
-            const key = e.key;
-            const code = e.code;
-
-            // 修饰键
-            if (key === 'Control') return 'Ctrl';
-            if (key === 'Alt') return 'Alt';
-            if (key === 'Shift') return 'Shift';
-            if (key === 'Meta') return 'Meta';
-
-            // 功能键
-            if (code === 'Space') return 'Space';
-            if (code === 'Enter') return 'Enter';
-            if (code === 'Escape') return 'Esc';
-            if (code === 'Backspace') return 'Backspace';
-            if (code === 'Tab') return 'Tab';
-
-            // 方向键
-            if (code === 'ArrowUp') return 'Up';
-            if (code === 'ArrowDown') return 'Down';
-            if (code === 'ArrowLeft') return 'Left';
-            if (code === 'ArrowRight') return 'Right';
-
-            // 其他可打印键
-            if (key.length === 1) {
-                return key.toUpperCase();
             }
 
-            // F1-F12 等
-            if (key.startsWith('F') && !key.includes(' ')) {
-                return key;
-            }
-
-            return null;
-        }
-
-        // 匹配按键组合
-        function matchKeys(keys) {
-            if (!currentShortcuts || currentShortcuts.length === 0) return;
-
-            const keyStr = keys.join('+').toLowerCase();
-
-            const match = currentShortcuts.find(s => {
-                const shortcutKeys = s.keys.map(k => k.toLowerCase()).join('+');
-                return shortcutKeys === keyStr;
-            });
-
-            if (match) {
-                // 滚动到对应的 item 并高亮
-                scrollToShortcut(match);
-                // 更新提示文字
-                document.getElementById('keyHintText').textContent = `✅ ${match.keys.join('+')} → ${match.command}`;
-                setTimeout(() => {
-                    document.getElementById('keyHintText').textContent = '💡 直接按下快捷键可跳转到对应记录';
-                }, 2000);
-            } else {
-                document.getElementById('keyHintText').textContent = `❌ 未找到: ${keys.join('+')}`;
-                setTimeout(() => {
-                    document.getElementById('keyHintText').textContent = '💡 直接按下快捷键可跳转到对应记录';
-                }, 2000);
-            }
-        }
-
-        // 滚动到并高亮快捷键
-        function scrollToShortcut(target) {
-            // 移除之前的高亮
-            document.querySelectorAll('.shortcut-item.highlight').forEach(el => {
-                el.classList.remove('highlight');
-            });
-
-            // 查找对应的元素
-            const items = document.querySelectorAll('.shortcut-item');
-            for (const item of items) {
-                const keysEl = item.querySelector('.keys');
-                const commandEl = item.querySelector('.command');
-                if (keysEl && commandEl) {
-                    const keysText = keysEl.textContent.toLowerCase();
-                    const commandText = commandEl.textContent;
-                    if (keysText === target.keys.join('+').toLowerCase() &&
-                        commandText === target.command) {
-                        item.classList.add('highlight');
-                        item.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        break;
+            function matchKeys(keys) {
+                const shortcuts = UI.getCurrentShortcuts();
+                if (!shortcuts || shortcuts.length === 0) return;
+                const keyStr = KeyMap.toMatchString(keys);
+                const match = shortcuts.find(s => KeyMap.toMatchString(s.keys) === keyStr);
+                const hintEl = document.getElementById('keyHintText');
+                if (match) {
+                    scrollToShortcut(match);
+                    if (hintEl) {
+                        hintEl.textContent = `✅ ${match.keys.join('+')} → ${match.command}`;
+                        setTimeout(() => {
+                            if (hintEl) hintEl.textContent = '💡 直接按下快捷键可跳转到对应记录';
+                        }, 2000);
+                    }
+                } else {
+                    if (hintEl) {
+                        hintEl.textContent = `❌ 未找到: ${keys.join('+')}`;
+                        setTimeout(() => {
+                            if (hintEl) hintEl.textContent = '💡 直接按下快捷键可跳转到对应记录';
+                        }, 2000);
                     }
                 }
             }
-        }
 
-        // 填充软件列表
-        function populateSoftwareList() {
-            const list = document.getElementById('softwareList');
-            list.innerHTML = '';
-
-            // 自定义软件
-            Object.keys(customShortcuts).forEach(key => {
-                const item = createSoftwareItem(key, customShortcuts[key].name, `custom_${key}`);
-                list.appendChild(item);
-            });
-        }
-
-        function createSoftwareItem(key, name, value) {
-            const div = document.createElement('div');
-            div.className = `software-item ${key}`;
-            div.dataset.value = value;
-            div.innerHTML = `<span class="icon">${name.charAt(0)}</span>${name}`;
-            div.addEventListener('click', () => selectSoftware(value));
-
-            // 右键菜单（所有软件均可删除）
-            div.addEventListener('contextmenu', (e) => {
-                e.preventDefault();
-                const softwareKey = value.startsWith('custom_') ? value.replace('custom_', '') : value;
-                showDeleteDialog(softwareKey, name);
-            });
-            return div;
-        }
-
-        // 显示删除对话框
-        let pendingDeleteKey = null;
-        function showDeleteDialog(softwareKey, softwareName) {
-            pendingDeleteKey = softwareKey;
-            document.getElementById('deleteDialogText').textContent = `确定删除「${softwareName}」及其所有快捷键？`;
-            document.getElementById('deleteDialog').classList.add('show');
-        }
-
-        // 选择软件
-        function selectSoftware(software) {
-            document.querySelectorAll('.software-item').forEach(item => {
-                item.classList.toggle('active', item.dataset.value === software);
-            });
-
-            let data = null;
-            let softwareKey = null;
-
-            if (software.startsWith('custom_')) {
-                softwareKey = software.replace('custom_', '');
-                data = customShortcuts[softwareKey];
-            } else {
-                softwareKey = software;
-                data = customShortcuts[softwareKey];
+            function scrollToShortcut(target) {
+                document.querySelectorAll('.shortcut-item.highlight').forEach(el => {
+                    el.classList.remove('highlight');
+                });
+                const items = document.querySelectorAll('.shortcut-item');
+                for (const item of items) {
+                    const keysEl = item.querySelector('.keys');
+                    const commandEl = item.querySelector('.command');
+                    if (keysEl && commandEl) {
+                        if (keysEl.textContent.toLowerCase() === target.keys.join('+').toLowerCase() &&
+                            commandEl.textContent === target.command) {
+                            item.classList.add('highlight');
+                            item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            break;
+                        }
+                    }
+                }
             }
 
-            if (!data || !data.shortcuts) {
-                showEmpty('暂无数据');
-                return;
+            return { handleGlobalKey };
+        })();
+
+        // ============================================================
+        // Actions — 业务操作(编辑/删除/导入)
+        // ============================================================
+        const Actions = (function() {
+            function editShortcut(softwareKey, idx) {
+                const data = Store.get(softwareKey);
+                if (!data) {
+                    Toast.error('无法编辑:软件不存在');
+                    return;
+                }
+                const shortcuts = data.shortcuts;
+                if (!Number.isInteger(idx) || idx < 0 || idx >= shortcuts.length) {
+                    Toast.error('编辑失败:索引越界');
+                    return;
+                }
+                const shortcut = shortcuts[idx];
+                showEditDialog(softwareKey, idx, shortcut);
             }
 
-            currentSoftware = software;
-            currentShortcuts = data.shortcuts;
+            async function deleteShortcut(softwareKey, idx) {
+                const data = Store.get(softwareKey);
+                if (!data) {
+                    Toast.error('无法删除:软件不存在');
+                    return;
+                }
+                if (!Number.isInteger(idx) || idx < 0 || idx >= data.shortcuts.length) {
+                    Toast.error('删除失败:索引越界');
+                    return;
+                }
+                data.shortcuts.splice(idx, 1);
+                const ok = await Store.save(softwareKey, data);
+                if (ok) {
+                    UI.selectSoftware(`custom_${softwareKey}`);
+                    Toast.success('已删除');
+                }
+            }
 
-            document.getElementById('softwareTitle').innerHTML = `
-                ${data.name}
-                <span class="badge">${data.shortcuts.length} 个快捷键</span>
-            `;
+            function showEditDialog(softwareKey, idx, shortcut) {
+                Recorder.stop();
+                const dialog = document.getElementById('editDialog');
+                if (!dialog) return;
+                document.getElementById('editKeys').value = (shortcut.keys || []).join('+');
+                document.getElementById('editCommand').value = shortcut.command || '';
+                document.getElementById('editCategory').value = shortcut.category || '';
+                document.getElementById('editDescription').value = shortcut.description || '';
+                dialog.dataset.softwareKey = softwareKey;
+                dialog.dataset.shortcutIndex = String(idx);
+                dialog.querySelector('h3').textContent = '编辑快捷键';
+                document.getElementById('editDialogSave').textContent = '保存';
+                dialog.classList.add('show');
+            }
 
-            const addBtn = document.getElementById('addShortcutBtn');
-            addBtn.style.display = 'block';
+            function showAddDialog() {
+                const current = UI.getCurrentSoftware();
+                if (!current || !current.startsWith('custom_')) {
+                    Toast.error('请先选择一个自定义软件');
+                    return;
+                }
+                const softwareKey = current.replace('custom_', '');
+                document.getElementById('editKeys').value = '';
+                document.getElementById('editCommand').value = '';
+                document.getElementById('editCategory').value = '常用';
+                document.getElementById('editDescription').value = '';
+                const dialog = document.getElementById('editDialog');
+                dialog.dataset.softwareKey = softwareKey;
+                dialog.dataset.shortcutIndex = '-1';
+                dialog.querySelector('h3').textContent = '添加快捷键';
+                document.getElementById('editDialogSave').textContent = '添加';
+                dialog.classList.add('show');
+            }
 
-            populateCategorySelect(data.shortcuts);
-            renderShortcuts(data.shortcuts);
-        }
+            async function saveEditDialog() {
+                const dialog = document.getElementById('editDialog');
+                const softwareKey = dialog.dataset.softwareKey;
+                const shortcutIndex = parseInt(dialog.dataset.shortcutIndex, 10);
+                const isAdding = shortcutIndex === -1;
+                const newKeys = document.getElementById('editKeys').value.trim();
+                const newCommand = document.getElementById('editCommand').value.trim();
+                const newCategory = document.getElementById('editCategory').value.trim();
+                const newDesc = document.getElementById('editDescription').value.trim();
 
-        // 填充分类选择
-        function populateCategorySelect(shortcuts) {
-            const select = document.getElementById('categorySelect');
-            const categories = [...new Set(shortcuts.map(s => s.category))];
-            select.innerHTML = '<option value="">全部分类</option>';
-            categories.sort().forEach(cat => {
-                select.innerHTML += `<option value="${cat}">${cat}</option>`;
-            });
-        }
+                if (!newKeys) { Toast.error('请填写快捷键'); return; }
+                if (!newCommand) { Toast.error('请填写命令'); return; }
 
-        // 筛选快捷键
-        function filterShortcuts(keyword, category) {
-            // 空关键词显示全部，有关键词时搜索中英文
-            let filtered = currentShortcuts;
+                const data = Store.get(softwareKey);
+                if (!data) { Toast.error('数据已被删除,请刷新'); return; }
 
-            if (keyword && keyword.trim()) {
-                keyword = keyword.toLowerCase().trim();
-                filtered = filtered.filter((s, idx) => {
-                    // 匹配 command（英文名）
-                    const commandMatch = s.command.toLowerCase().includes(keyword);
-                    // 匹配 description（中文描述）
-                    const descMatch = s.description && s.description.toLowerCase().includes(keyword);
-                    // 匹配 keys（按键组合）
-                    const keysMatch = s.keys.join('+').toLowerCase().includes(keyword);
-                    // 匹配 category（分类名）
-                    const catMatch = s.category.toLowerCase().includes(keyword);
-                    return commandMatch || descMatch || keysMatch || catMatch;
+                const newShortcut = {
+                    keys: newKeys.split('+').map(k => k.trim()).filter(Boolean),
+                    command: newCommand,
+                    category: newCategory || '常用',
+                    description: newDesc
+                };
+
+                if (isAdding) {
+                    data.shortcuts.push(newShortcut);
+                    dialog.querySelector('h3').textContent = '编辑快捷键';
+                    document.getElementById('editDialogSave').textContent = '保存';
+                } else {
+                    if (shortcutIndex < 0 || shortcutIndex >= data.shortcuts.length) {
+                        Toast.error('索引已失效,请重新选择');
+                        return;
+                    }
+                    data.shortcuts[shortcutIndex] = newShortcut;
+                }
+
+                const ok = await Store.save(softwareKey, data);
+                if (ok) {
+                    UI.selectSoftware(`custom_${softwareKey}`);
+                    dialog.classList.remove('show');
+                    Toast.success(isAdding ? '已添加' : '已保存');
+                }
+            }
+
+            async function importShortcuts(data) {
+                const result = Validator.validateImportData(data);
+                if (!result.valid) {
+                    const msg = '数据校验失败:\n' + result.errors.map(e => '· ' + e).join('\n');
+                    Toast.error(msg);
+                    return false;
+                }
+                const key = String(data.software).toLowerCase().replace(/\s+/g, '_');
+                const shortcuts = data.shortcuts.map(s => Validator.sanitizeShortcut(s));
+                const newData = { name: data.software, shortcuts };
+                Store.setLocal(key, newData);
+                const ok = await Store.save(key, newData);
+                if (ok) {
+                    UI.populateSoftwareList();
+                    UI.selectSoftware(`custom_${key}`);
+                    Toast.success(`已导入「${data.software}」(${shortcuts.length} 条)`);
+                }
+                return ok;
+            }
+
+            function importFromText(text) {
+                if (!text) {
+                    Toast.error('请先粘贴 JSON 内容');
+                    return;
+                }
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (err) {
+                    Toast.error('JSON 解析失败:' + err.message);
+                    return;
+                }
+                importShortcuts(data).then(ok => {
+                    if (ok) {
+                        document.getElementById('importOverlay').classList.add('hidden');
+                        document.getElementById('pasteInput').value = '';
+                    }
                 });
             }
 
-            if (category) {
-                filtered = filtered.filter((s, idx) => s.category === category);
-            }
-
-            // 保持原始索引（用于编辑/删除）
-            filtered = filtered.map((s, idx) => {
-                const originalIdx = currentShortcuts.indexOf(s);
-                return { ...s, index: originalIdx };
-            });
-
-            renderShortcuts(filtered);
-        }
-
-        // 渲染快捷键列表
-        function renderShortcuts(shortcuts) {
-            const container = document.getElementById('shortcutList');
-
-            if (shortcuts.length === 0) {
-                // 创建空状态元素
-                const emptyHtml = `
-                    <div class="empty-state" style="display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); padding: 40px;">
-                        <div class="icon" style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;">⌨️</div>
-                        <div class="title" style="font-size: 16px; margin-bottom: 8px;">没有找到匹配的快捷键</div>
-                        <div class="desc" style="font-size: 13px;">尝试其他关键词或分类</div>
-                    </div>
-                `;
-                container.innerHTML = emptyHtml;
-                return;
-            }
-
-            // 判断是否为自定义软件（仅用于区分样式，编辑功能对所有软件开放）
-            const isCustom = currentSoftware && currentSoftware.startsWith('custom_');
-            // 编辑功能：所有软件都可以编辑快捷键，编辑时创建自定义副本
-            const canEdit = currentSoftware !== null;
-            const softwareKey = isCustom ? currentSoftware.replace('custom_', '') : (currentSoftware || null);
-
-            // 按分类分组
-            // shortcuts 中的 index 属性来自 filterShortcuts（保留原始位置）或为 undefined（直接渲染）
-            const grouped = {};
-            shortcuts.forEach((s, idx) => {
-                const cat = s.category || '其他';
-                if (!grouped[cat]) grouped[cat] = [];
-                // 如果 shortcut 有显式的 index（来自 filter），使用它；否则使用当前遍历的 idx
-                const hasExplicitIndex = s.hasOwnProperty('index');
-                grouped[cat].push({ ...s, index: hasExplicitIndex ? s.index : idx });
-            });
-
-            let html = '';
-            Object.keys(grouped).sort().forEach(category => {
-                html += `<div class="category-group">
-                    <div class="category-header">${category}</div>`;
-                grouped[category].forEach((s) => {
-                    html += `
-                        <div class="shortcut-item">
-                            <span class="keys">${s.keys.join('+')}</span>
-                            <span class="command">${s.command}</span>
-                            <span class="description">${s.description || ''}</span>
-                            ${canEdit ? `<span class="item-actions">
-                                <button class="action-btn" onclick="editShortcutItem('${softwareKey}', ${s.index})" title="编辑">✏️</button>
-                                <button class="action-btn" onclick="deleteShortcutItem('${softwareKey}', ${s.index})" title="删除">🗑️</button>
-                            </span>` : ''}
-                        </div>`;
-                });
-                html += '</div>';
-            });
-
-            container.innerHTML = html;
-        }
-
-        // 显示空状态
-        function showEmpty(title, desc) {
-            const container = document.getElementById('shortcutList');
-            container.innerHTML = `
-                <div class="empty-state" style="display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); padding: 40px;">
-                    <div class="icon" style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;">⌨️</div>
-                    <div class="title" style="font-size: 16px; margin-bottom: 8px;">${title || '选择软件查看快捷键'}</div>
-                    <div class="desc" style="font-size: 13px;">${desc || '或点击上方「导入快捷键」添加自定义数据'}</div>
-                </div>
-            `;
-        }
-
-        // 加载自定义快捷键
-        async function loadCustomShortcuts() {
-            try {
-                const result = await utools.db.allDocs();
-                customShortcuts = {};
-
-                if (Array.isArray(result)) {
-                    result.forEach(doc => {
-                        if (doc._id && doc._id.startsWith('custom_') && doc.data) {
-                            const key = doc._id.replace('custom_', '');
-                            customShortcuts[key] = doc.data;
+            function importFromFile(file) {
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    let data;
+                    try {
+                        data = JSON.parse(event.target.result);
+                    } catch (err) {
+                        Toast.error('JSON 解析失败:' + err.message);
+                        return;
+                    }
+                    importShortcuts(data).then(ok => {
+                        if (ok) {
+                            document.getElementById('importOverlay').classList.add('hidden');
                         }
                     });
-                }
-                populateSoftwareList();
-            } catch (err) {
-                customShortcuts = {};
+                };
+                reader.readAsText(file);
             }
-        }
 
-        // 保存单个软件快捷键到数据库
-        async function saveShortcutToDb(key, data) {
-            try {
-                const docId = `custom_${key}`;
-                let existing = null;
-                try {
-                    existing = await utools.db.get(docId);
-                } catch (e) {
-                    // 文档不存在，正常
+            async function addSoftware() {
+                const input = document.getElementById('newSoftwareName');
+                const name = input.value.trim();
+                if (!name) { Toast.error('请填写软件名称'); return; }
+                const key = name.toLowerCase().replace(/\s+/g, '_');
+                if (!Validator.isValidSoftwareKey(key)) {
+                    Toast.error('软件名不合法(请使用字母/数字/下划线)');
+                    return;
                 }
+                if (Store.get(key)) {
+                    Toast.error(`「${name}」已存在,已为您选中`);
+                    UI.selectSoftware(`custom_${key}`);
+                    closeAddSoftwareDialog();
+                    return;
+                }
+                const data = { name: UI.capitalizeName(name), shortcuts: [] };
+                Store.setLocal(key, data);
+                const ok = await Store.save(key, data);
+                if (ok) {
+                    UI.populateSoftwareList();
+                    UI.selectSoftware(`custom_${key}`);
+                    closeAddSoftwareDialog();
+                    Toast.success(`已添加「${data.name}」`);
+                }
+            }
 
-                if (existing) {
-                    await utools.db.put({
-                        _id: docId,
-                        _rev: existing._rev,
-                        data: data
-                    });
+            function closeAddSoftwareDialog() {
+                const input = document.getElementById('newSoftwareName');
+                if (input) input.value = '';
+                const dlg = document.getElementById('addSoftwareDialog');
+                if (dlg) dlg.classList.remove('show');
+            }
+
+            async function confirmDeleteSoftware() {
+                const key = UI.getPendingDeleteKey();
+                if (!key) {
+                    UI.closeDeleteDialog();
+                    return;
+                }
+                const ok = await Store.remove(key);
+                if (ok) {
+                    UI.clearPendingDelete();
+                    UI.populateSoftwareList();
+                    UI.showEmpty('选择软件查看快捷键', '或点击上方「导入快捷键」添加自定义数据');
+                    UI.closeDeleteDialog();
+                    Toast.success('已删除');
                 } else {
-                    await utools.db.put({
-                        _id: docId,
-                        data: data
-                    });
+                    UI.closeDeleteDialog();
                 }
-            } catch (err) {
-                // silent fail
-            }
-        }
-
-        // 从数据库删除快捷键
-        async function deleteShortcutFromDb(key) {
-            try {
-                const docId = `custom_${key}`;
-                const doc = await utools.db.get(docId);
-                await utools.db.remove(doc);
-            } catch (err) {
-                // silent fail
-            }
-        }
-
-        // 删除快捷键项
-        async function deleteShortcutItem(softwareKey, shortcutIndex) {
-            if (!customShortcuts[softwareKey]) {
-                alert('无法删除该软件的快捷键');
-                return;
-            }
-            customShortcuts[softwareKey].shortcuts.splice(shortcutIndex, 1);
-            await saveShortcutToDb(softwareKey, customShortcuts[softwareKey]);
-            selectSoftware(`custom_${softwareKey}`);
-        }
-
-        // 编辑快捷键项
-        function editShortcutItem(softwareKey, shortcutIndex) {
-            if (!customShortcuts[softwareKey]) {
-                alert('无法编辑该软件的快捷键');
-                return;
             }
 
-            const shortcuts = customShortcuts[softwareKey].shortcuts;
-            const shortcut = shortcuts[shortcutIndex];
-            if (!shortcut) return;
-
-            // 使用对话框编辑
-            showEditDialog(softwareKey, shortcutIndex, shortcut);
-        }
-
-        // 显示编辑对话框
-        function showEditDialog(softwareKey, shortcutIndex, shortcut) {
-            stopRecording();
-            const dialog = document.getElementById('editDialog');
-            document.getElementById('editKeys').value = shortcut.keys.join('+');
-            document.getElementById('editCommand').value = shortcut.command;
-            document.getElementById('editCategory').value = shortcut.category;
-            document.getElementById('editDescription').value = shortcut.description || '';
-            dialog.dataset.softwareKey = softwareKey;
-            dialog.dataset.shortcutIndex = shortcutIndex;
-            // 恢复标题和按钮文本
-            dialog.querySelector('h3').textContent = '编辑快捷键';
-            document.getElementById('editDialogSave').textContent = '保存';
-            dialog.classList.add('show');
-        }
-
-        // 导入快捷键
-        async function importShortcuts(data) {
-            const key = data.software.toLowerCase().replace(/\s+/g, '_');
-            const shortcuts = data.shortcuts.map(s => ({
-                keys: s.keys || [],
-                command: s.command || 'Unknown',
-                category: s.category || '其他',
-                description: s.description || ''
-            }));
-
-            customShortcuts[key] = {
-                name: data.software,
-                shortcuts: shortcuts
+            return {
+                editShortcut,
+                deleteShortcut,
+                showEditDialog,
+                showAddDialog,
+                saveEditDialog,
+                importShortcuts,
+                importFromText,
+                importFromFile,
+                addSoftware,
+                closeAddSoftwareDialog,
+                confirmDeleteSoftware
             };
+        })();
 
-            await saveShortcutToDb(key, customShortcuts[key]);
-            populateSoftwareList();
-            selectSoftware(`custom_${key}`);
-        }
-
-        // 录制快捷键
-        let recordedKeys = [];
-
-        function normalizeKey(key) {
-            const map = {
-                'Control': 'Ctrl',
-                'Alt': 'Alt',
-                'Shift': 'Shift',
-                'Meta': 'Meta',
-                ' ': 'Space'
+        // ============================================================
+        // Debounce 工具
+        // ============================================================
+        function debounce(fn, ms) {
+            let timer = null;
+            return function(...args) {
+                if (timer) clearTimeout(timer);
+                timer = setTimeout(() => fn.apply(this, args), ms);
             };
-            if (map[key]) return map[key];
-            if (key.length === 1) return key.toUpperCase();
-            if (key.startsWith('F') && key.length <= 4) return key;
-            return key;
         }
 
-        function startRecording() {
-            isRecording = true;
-            recordedKeys = [];
-            const btn = document.getElementById('recordKeyBtn');
-            const icon = document.getElementById('recordIcon');
-            icon.textContent = '⏸';
-            icon.style.color = '#fff';
-            document.getElementById('recordText').style.color = '#fff';
-            btn.style.background = 'var(--accent)';
-            const input = document.getElementById('editKeys');
-            input.value = '';
-            input.placeholder = '按下按键...';
-            input.focus();
+        // ============================================================
+        // 进程名识别
+        // ============================================================
+        function getSoftwareKeyFromProcess(processName, softwareMapping) {
+            const name = String(processName || '').replace(/\.exe$/i, '').toLowerCase();
+            if (!name) return null;
+            if (softwareMapping && softwareMapping[name]) return softwareMapping[name];
+            if (softwareMapping) {
+                for (const [key, value] of Object.entries(softwareMapping)) {
+                    if (key && (name.includes(key) || key.includes(name))) {
+                        return value;
+                    }
+                }
+            }
+            return name.replace(/\s+/g, '_');
         }
 
-        function stopRecording() {
-            isRecording = false;
-            const btn = document.getElementById('recordKeyBtn');
-            const icon = document.getElementById('recordIcon');
-            icon.textContent = '▶';
-            icon.style.color = 'var(--accent)';
-            document.getElementById('recordText').textContent = '录制';
-            document.getElementById('recordText').style.color = 'var(--text-primary)';
-            btn.style.background = 'transparent';
-            const input = document.getElementById('editKeys');
-            input.placeholder = '按下录制按钮后按键';
-        }
-
-        // 设置事件监听
+        // ============================================================
+        // 事件绑定(只绑一次,移到 init 外)
+        // ============================================================
         function setupEventListeners() {
-            document.getElementById('searchInput').addEventListener('input', (e) => {
-                const category = document.getElementById('categorySelect').value;
-                filterShortcuts(e.target.value, category);
+            // 主题
+            document.getElementById('themeToggle').addEventListener('click', () => Theme.toggle());
+
+            // 搜索 + 分类(带 debounce)
+            const searchInput = document.getElementById('searchInput');
+            const categorySelect = document.getElementById('categorySelect');
+            const debouncedFilter = debounce((kw, cat) => UI.filterShortcuts(kw, cat), 250);
+            searchInput.addEventListener('input', (e) => {
+                debouncedFilter(e.target.value, categorySelect.value);
+            });
+            categorySelect.addEventListener('change', (e) => {
+                debouncedFilter(searchInput.value, e.target.value);
             });
 
-            document.getElementById('categorySelect').addEventListener('change', (e) => {
-                const keyword = document.getElementById('searchInput').value;
-                filterShortcuts(keyword, e.target.value);
-            });
-
+            // 导入按钮
             document.getElementById('importBtn').addEventListener('click', () => {
                 document.getElementById('importOverlay').classList.remove('hidden');
             });
+            document.getElementById('importClose').addEventListener('click', () => {
+                document.getElementById('importOverlay').classList.add('hidden');
+            });
+            document.getElementById('importOverlay').addEventListener('click', (e) => {
+                if (e.target === document.getElementById('importOverlay')) {
+                    document.getElementById('importOverlay').classList.add('hidden');
+                }
+            });
+            document.getElementById('importArea').addEventListener('click', () => {
+                document.getElementById('fileInput').click();
+            });
+            const fileInput = document.getElementById('fileInput');
+            fileInput.addEventListener('change', (e) => {
+                Actions.importFromFile(e.target.files[0]);
+                fileInput.value = '';
+            });
+            document.getElementById('pasteImportBtn').addEventListener('click', () => {
+                Actions.importFromText(document.getElementById('pasteInput').value.trim());
+            });
 
-            // 帮助按钮 tooltip（点击切换）
+            // 帮助
             const helpBtn = document.getElementById('helpBtn');
             const helpTooltip = document.getElementById('helpTooltip');
             const helpClose = document.getElementById('helpClose');
             helpBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const isVisible = helpTooltip.style.display === 'block';
-                helpTooltip.style.display = isVisible ? 'none' : 'block';
+                helpTooltip.style.display = helpTooltip.style.display === 'block' ? 'none' : 'block';
             });
             helpClose.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -1551,259 +1980,111 @@
             document.addEventListener('click', () => {
                 helpTooltip.style.display = 'none';
             });
-            helpTooltip.addEventListener('click', (e) => {
-                e.stopPropagation();
-            });
+            helpTooltip.addEventListener('click', (e) => e.stopPropagation());
 
-            document.getElementById('importClose').addEventListener('click', () => {
-                document.getElementById('importOverlay').classList.add('hidden');
-            });
-
-            document.getElementById('importOverlay').addEventListener('click', (e) => {
-                if (e.target === document.getElementById('importOverlay')) {
-                    document.getElementById('importOverlay').classList.add('hidden');
-                }
-            });
-
-            const fileInput = document.getElementById('fileInput');
-            fileInput.addEventListener('change', (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    try {
-                        const data = JSON.parse(event.target.result);
-                        if (data.software && data.shortcuts && Array.isArray(data.shortcuts)) {
-                            importShortcuts(data);
-                            document.getElementById('importOverlay').classList.add('hidden');
-                        } else {
-                            alert('文件格式不正确');
-                        }
-                    } catch (err) {
-                        alert('JSON 解析失败');
-                    }
-                };
-                reader.readAsText(file);
-                fileInput.value = '';
-            });
-
-            document.getElementById('importArea').addEventListener('click', () => {
-                fileInput.click();
-            });
-
-            // 粘贴导入
-            document.getElementById('pasteImportBtn').addEventListener('click', () => {
-                const text = document.getElementById('pasteInput').value.trim();
-                if (!text) {
-                    alert('请先粘贴 JSON 内容');
-                    return;
-                }
-                try {
-                    const data = JSON.parse(text);
-                    if (data.software && data.shortcuts && Array.isArray(data.shortcuts)) {
-                        importShortcuts(data);
-                        document.getElementById('importOverlay').classList.add('hidden');
-                        document.getElementById('pasteInput').value = '';
-                    } else {
-                        alert('JSON 格式不正确');
-                    }
-                } catch (err) {
-                    alert('JSON 解析失败');
-                }
-            });
-
-            // 添加软件按钮
+            // 添加软件
             document.getElementById('addSoftwareBtn').addEventListener('click', () => {
                 document.getElementById('addSoftwareDialog').classList.add('show');
                 document.getElementById('newSoftwareName').focus();
             });
+            document.getElementById('addSoftwareDialogClose').addEventListener('click', Actions.closeAddSoftwareDialog);
+            document.getElementById('addSoftwareDialogCancel').addEventListener('click', Actions.closeAddSoftwareDialog);
+            document.getElementById('submitAddSoftware').addEventListener('click', Actions.addSoftware);
 
-            // 关闭添加软件对话框
-            document.getElementById('addSoftwareDialogClose').addEventListener('click', () => {
-                document.getElementById('addSoftwareDialog').classList.remove('show');
-            });
-            document.getElementById('addSoftwareDialogCancel').addEventListener('click', () => {
-                document.getElementById('addSoftwareDialog').classList.remove('show');
-            });
+            // 删除对话框
+            document.getElementById('deleteDialogClose').addEventListener('click', UI.closeDeleteDialog);
+            document.getElementById('deleteDialogCancel').addEventListener('click', UI.closeDeleteDialog);
+            document.getElementById('deleteDialogConfirm').addEventListener('click', Actions.confirmDeleteSoftware);
 
-            // 提交添加软件
-            document.getElementById('submitAddSoftware').addEventListener('click', () => {
-                const name = document.getElementById('newSoftwareName').value.trim();
-
-                if (!name) {
-                    alert('请填写软件名称');
-                    return;
-                }
-
-                const key = name.toLowerCase().replace(/\s+/g, '_');
-
-                if (!customShortcuts[key]) {
-                    customShortcuts[key] = { name: capitalizeName(name), shortcuts: [] };
-                    saveShortcutToDb(key, customShortcuts[key]);
-                }
-
-                populateSoftwareList();
-                selectSoftware(`custom_${key}`);
-                // 清空并关闭对话框
-                document.getElementById('newSoftwareName').value = '';
-                document.getElementById('addSoftwareDialog').classList.remove('show');
-            });
-
-            // 删除对话框 - 确认
-            let isDeleting = false;
-            document.getElementById('deleteDialogConfirm').addEventListener('click', () => {
-                if (pendingDeleteKey && !isDeleting) {
-                    isDeleting = true;
-                    (async () => {
-                        // 从数据库删除
-                        await deleteShortcutFromDb(pendingDeleteKey);
-                        delete customShortcuts[pendingDeleteKey];
-                        populateSoftwareList();
-                        pendingDeleteKey = null;
-                        showEmpty('选择软件查看快捷键', '或点击上方「导入快捷键」添加自定义数据');
-                        isDeleting = false;
-                    })();
-                }
-                document.getElementById('deleteDialog').classList.remove('show');
-            });
-
-            // 删除对话框 - 取消
-            document.getElementById('deleteDialogClose').addEventListener('click', () => {
-                pendingDeleteKey = null;
-                document.getElementById('deleteDialog').classList.remove('show');
-            });
-            document.getElementById('deleteDialogCancel').addEventListener('click', () => {
-                pendingDeleteKey = null;
-                document.getElementById('deleteDialog').classList.remove('show');
-            });
-
-            // 编辑对话框事件
+            // 编辑/添加对话框
             document.getElementById('editDialogClose').addEventListener('click', () => {
-                stopRecording();
+                Recorder.stop();
                 document.getElementById('editDialog').classList.remove('show');
             });
             document.getElementById('editDialogCancel').addEventListener('click', () => {
-                stopRecording();
+                Recorder.stop();
                 document.getElementById('editDialog').classList.remove('show');
             });
-
-            // 录制快捷键按钮
-            document.getElementById('recordKeyBtn').addEventListener('click', () => {
-                if (isRecording) {
-                    stopRecording();
-                    document.getElementById('recordText').textContent = '录制';
-                } else {
-                    startRecording();
-                    document.getElementById('recordText').textContent = '暂停';
-                }
+            document.getElementById('editDialogSave').addEventListener('click', () => {
+                Recorder.stop();
+                Actions.saveEditDialog();
             });
+            document.getElementById('addShortcutBtn').addEventListener('click', Actions.showAddDialog);
 
-            // 录制模式的按键处理
+            // 录制
+            document.getElementById('recordKeyBtn').addEventListener('click', () => Recorder.toggle());
             const editKeysInput = document.getElementById('editKeys');
             editKeysInput.addEventListener('keydown', (e) => {
-                // 非录制模式：正常输入，不拦截
-                if (!isRecording) {
-                    return;
-                }
-
-                // 录制模式：阻止冒泡到全局按键检测器
-                e.stopPropagation();
-                e.preventDefault();
-
-                if (e.key === 'Escape') {
-                    stopRecording();
-                    return;
-                }
-
-                const key = normalizeKey(e.key === ' ' ? 'Space' : e.key);
-                if (!recordedKeys.includes(key)) {
-                    recordedKeys.push(key);
-                }
-                editKeysInput.value = recordedKeys.join('+');
+                Recorder.handleEditKeysKeydown(e);
             });
-
-            // 允许手动输入（退出录制模式后）
             editKeysInput.addEventListener('input', () => {
-                if (!isRecording && editKeysInput.value) {
-                    // 标准化手动输入（只有在按 + 分隔时才处理）
-                    const parts = editKeysInput.value.split('+');
-                    if (parts.length > 1 || editKeysInput.value.endsWith('+')) {
-                        const keys = editKeysInput.value.split('+').map(k => normalizeKey(k.trim())).filter(k => k);
-                        editKeysInput.value = keys.join('+');
-                    }
-                }
+                Recorder.handleEditKeysInput(editKeysInput);
             });
 
-            // 添加快捷键按钮
-            document.getElementById('addShortcutBtn').addEventListener('click', () => {
-                if (!currentSoftware || !currentSoftware.startsWith('custom_')) {
-                    alert('请先选择一个自定义软件');
-                    return;
-                }
-
-                const softwareKey = currentSoftware.replace('custom_', '');
-
-                // 清空表单并显示添加对话框
-                document.getElementById('editKeys').value = '';
-                document.getElementById('editCommand').value = '';
-                document.getElementById('editCategory').value = '常用';
-                document.getElementById('editDescription').value = '';
-
-                const dialog = document.getElementById('editDialog');
-                dialog.dataset.softwareKey = softwareKey;
-                dialog.dataset.shortcutIndex = '-1';  // -1 表示新增
-                dialog.querySelector('h3').textContent = '添加快捷键';
-                document.getElementById('editDialogSave').textContent = '添加';
-                dialog.classList.add('show');
-            });
-
-            document.getElementById('editDialogSave').addEventListener('click', () => {
-                const dialog = document.getElementById('editDialog');
-                const softwareKey = dialog.dataset.softwareKey;
-                const shortcutIndex = parseInt(dialog.dataset.shortcutIndex);
-                const isAdding = shortcutIndex === -1;
-
-                const newKeys = document.getElementById('editKeys').value.trim();
-                const newCommand = document.getElementById('editCommand').value.trim();
-                const newCategory = document.getElementById('editCategory').value.trim();
-                const newDesc = document.getElementById('editDescription').value.trim();
-
-                if (!newKeys || !newCommand) {
-                    alert('请填写快捷键和命令');
-                    return;
-                }
-
-                const shortcuts = customShortcuts[softwareKey].shortcuts;
-                const newShortcut = {
-                    keys: newKeys.split('+').map(k => k.trim()),
-                    command: newCommand,
-                    category: newCategory || '常用',
-                    description: newDesc
-                };
-
-                if (isAdding) {
-                    shortcuts.push(newShortcut);
-                    // 恢复标题和按钮文本
-                    dialog.querySelector('h3').textContent = '编辑快捷键';
-                    document.getElementById('editDialogSave').textContent = '保存';
-                } else {
-                    shortcuts[shortcutIndex] = newShortcut;
-                }
-
-                saveShortcutToDb(softwareKey, customShortcuts[softwareKey]).then(() => {
-                    selectSoftware(`custom_${softwareKey}`);
-                    dialog.classList.remove('show');
-                });
-            });
-
-            // 不自动关闭：只有点击 X、取消、确认按钮才关闭
+            // 全局按键监听
+            document.addEventListener('keydown', (e) => Search.handleGlobalKey(e), true);
         }
 
-        // 初始化按键检测器
-        setupKeyDetector();
+        // ============================================================
+        // 初始化入口
+        // ============================================================
+        function init() {
+            Theme.apply();
+            setupEventListeners();
+            UI.populateSoftwareList();
 
-        init();
+            if (typeof utools === 'undefined' || !utools.onPluginEnter) {
+                // 非 uTools 环境(开发/调试)
+                const first = document.querySelector('.software-item');
+                if (first) UI.selectSoftware(first.dataset.value);
+                else UI.showEmpty();
+                return;
+            }
+
+            utools.onPluginEnter(({ code, type, payload }) => {
+                Theme.apply();
+                Store.loadAll().then(() => {
+                    UI.populateSoftwareList();
+                    const mapping = (window.sukeyApi && window.sukeyApi.loadSoftwareMapping)
+                        ? window.sukeyApi.loadSoftwareMapping() : { softwareMapping: {} };
+                    const softwareMapping = mapping.softwareMapping || {};
+
+                    if (type === 'window' && payload && payload.app) {
+                        const softwareKey = getSoftwareKeyFromProcess(payload.app, softwareMapping);
+                        if (softwareKey) {
+                            if (Store.get(softwareKey)) {
+                                UI.selectSoftware(`custom_${softwareKey}`);
+                            } else {
+                                const data = { name: UI.capitalizeName(softwareKey), shortcuts: [] };
+                                Store.setLocal(softwareKey, data);
+                                Store.save(softwareKey, data).then(() => {
+                                    UI.populateSoftwareList();
+                                    UI.selectSoftware(`custom_${softwareKey}`);
+                                });
+                            }
+                            return;
+                        }
+                    }
+
+                    const first = document.querySelector('.software-item');
+                    if (first) UI.selectSoftware(first.dataset.value);
+                    else UI.showEmpty('选择软件查看快捷键', '或点击上方「导入快捷键」添加自定义数据');
+                });
+            });
+        }
+
+        // ============================================================
+        // 对外暴露(供测试与外部调用)
+        // ============================================================
+        window.Sukey = {
+            init,
+            // 纯函数镜像(供 dev 工具 inspect;不要用于热路径)
+            pure: { KeyMap, Validator, Html }
+        };
+    })();
+
+    // 自动启动(必须在 IIFE 外,因为 Sukey 挂载后才存在)
+    Sukey.init();
     </script>
 </body>
 
