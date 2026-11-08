@@ -17,9 +17,30 @@ Sukey 是一个 uTools 插件，用于管理各软件的快捷键。进入插件
 - 完全未匹配的进程自动创建空条目
 
 ### 3. 快捷键存储
-- 内置 VSCode、Chrome 快捷键数据
+- 内置常用软件的快捷键数据（详见下表），首次运行时写入本地数据库
+- 内置数据是普通可编辑条目：可修改/删除，已修改的条目不会被启动时的补齐逻辑覆盖
+- 「更新内置数据」按钮可用内置数据强制恢复默认（不影响自己添加的软件）
 - 支持 JSON 格式导入自定义数据
 - 自定义数据保存在本地数据库
+
+### 内置快捷键数据
+
+`data/builtin-shortcuts.js` 内置了 10 款常用软件、共 362 条快捷键。标题栏会显示每条内置数据对应的软件版本；版本号是采集数据时对应的软件版本，仅作参考（软件更新后个别快捷键可能变化）。
+
+| 软件标识 | 名称 | 条数 | 对应版本 | 数据来源（官方公开文档） |
+| --- | --- | --- | --- | --- |
+| vscode | Visual Studio Code | 46 | 1.145 | https://code.visualstudio.com/docs/reference/default-keybindings |
+| chrome | Google Chrome | 37 | 158 | https://support.google.com/chrome/answer/157179 |
+| edge | Microsoft Edge | 43 | 157 | https://support.microsoft.com/en-us/edge/keyboard-shortcuts-in-microsoft-edge |
+| firefox | Mozilla Firefox | 52 | 159 | https://support.mozilla.org/en-US/kb/keyboard-shortcuts-perform-firefox-tasks-quickly |
+| word | Microsoft Word | 33 | 365（滚动更新） | https://support.microsoft.com/en-us/office/keyboard-shortcuts-in-word-95ef89dd-7142-4b50-afb2-f762f663ceb2 |
+| excel | Microsoft Excel | 34 | 365（滚动更新） | https://support.microsoft.com/en-us/office/keyboard-shortcuts-in-excel-1798d9d5-842a-42b8-9c99-9b7213f0040f |
+| powerpoint | Microsoft PowerPoint | 27 | 365（滚动更新） | https://support.microsoft.com/en-us/office/keyboard-shortcuts-in-powerpoint-ebb3d20e-dcd4-444f-a38e-bb5c5ed180f4 |
+| outlook | Microsoft Outlook | 29 | 新版 Windows 客户端 | https://support.microsoft.com/en-us/accessibility/outlook/keyboard-shortcuts-for-outlook |
+| obsidian | Obsidian | 28 | 1.15 | https://help.obsidian.md/Editing+and+formatting/Editing+shortcuts |
+| photoshop | Adobe Photoshop | 33 | 2024 | Photoshop 默认快捷键（Windows） |
+
+> 快捷键均为 Windows 键位。`data/builtin-shortcuts.js` 由脚本集中生成，文件头记录了来源与采集版本，请勿逐条手改。
 
 ### 4. 查询能力
 - 中英文模糊搜索
@@ -36,6 +57,7 @@ Sukey 是一个 uTools 插件，用于管理各软件的快捷键。进入插件
 |-- logo.png              # 128x128 图标
 |-- data/                 # 配置文件
 |   |-- software-mapping.json  # 进程名映射配置
+|   |-- builtin-shortcuts.js   # 内置快捷键数据（生成文件，来源/版本见文件头）
 ```
 
 ## 配置说明
@@ -144,6 +166,12 @@ const shortcutsData = {
 5. 修改代码后按 `Ctrl+Shift+P` 重新加载
 
 ## 更新日志
+
+### 2026-11-08
+- 扩充内置快捷键：新增 Office（Word/Excel/PowerPoint/Outlook）、Edge、Firefox、Obsidian、Photoshop 等
+- 内置数据抽到 `data/builtin-shortcuts.js`，首次运行写入数据库，数据来源与对应版本见文件头
+- 标题栏显示内置数据对应的软件版本
+- 新增「更新内置数据」按钮，可用内置数据恢复默认（保留自定义软件）
 
 ### 2026-05-30
 - 新增窗口自动识别功能

@@ -175,6 +175,12 @@
             font-weight: normal;
         }
 
+        .software-title .version-badge {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+        }
+
         .search-container {
             display: flex;
             gap: 8px;
@@ -744,6 +750,23 @@
                 ">
                     <span>+</span> 添加软件
                 </button>
+                <button id="restoreBuiltinBtn" title="用内置数据覆盖当前软件列表，恢复默认快捷键" style="
+                    width: 100%;
+                    margin-top: 8px;
+                    padding: 8px;
+                    background: var(--bg-hover);
+                    border: 1px solid var(--border);
+                    border-radius: 4px;
+                    color: var(--text-secondary);
+                    font-size: 12px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 6px;
+                ">
+                    <span>⟳</span> 更新内置数据
+                </button>
             </div>
         </div>
 
@@ -948,6 +971,9 @@
 
     <!-- Toast 容器 -->
     <div class="toast-container" id="toastContainer"></div>
+
+    <!-- 内置快捷键数据(生成文件，数据来源与对应版本见文件头) -->
+    <script src="./data/builtin-shortcuts.js"></script>
 
     <script>
     /* =====================================================================
@@ -1221,6 +1247,62 @@
         })();
 
         // ============================================================
+        // Builtin — 内置快捷键数据(来自 data/builtin-shortcuts.js)
+        // ============================================================
+        // 首次运行时把内置数据写入 uTools 数据库(custom_<key>)。
+        // 内置数据本身是普通可编辑条目，故默认遵循"已有则保留"：
+        // 只补齐缺失的软件，不覆盖用户已修改的内容；
+        // 需要恢复默认时由「更新内置数据」按钮强制覆盖。
+        const Builtin = (function() {
+            function getData() {
+                const b = (typeof window !== 'undefined' && window.SukeyBuiltin) || null;
+                return (b && b.data) ? b.data : {};
+            }
+
+            function getVersions() {
+                const b = (typeof window !== 'undefined' && window.SukeyBuiltin) || null;
+                return (b && b.versions) ? b.versions : {};
+            }
+
+            function getVersion(key) {
+                return getVersions()[key] || '';
+            }
+
+            function clone(data) {
+                return JSON.parse(JSON.stringify(data));
+            }
+
+            // 把缺失的内置软件写入数据库；返回新增的 key 数组
+            async function seedMissing() {
+                const data = getData();
+                const added = [];
+                for (const key of Object.keys(data)) {
+                    if (Store.get(key)) continue; // 已有则跳过
+                    const entry = { name: data[key].name, shortcuts: clone(data[key].shortcuts) };
+                    Store.setLocal(key, entry);
+                    await Store.save(key, entry);
+                    added.push(key);
+                }
+                return added;
+            }
+
+            // 用内置数据强制覆盖所有内置软件(保留用户自定义的其他软件)；返回覆盖的 key 数组
+            async function restoreAll() {
+                const data = getData();
+                const done = [];
+                for (const key of Object.keys(data)) {
+                    const entry = { name: data[key].name, shortcuts: clone(data[key].shortcuts) };
+                    Store.setLocal(key, entry);
+                    const ok = await Store.save(key, entry);
+                    if (ok) done.push(key);
+                }
+                return done;
+            }
+
+            return { getData, getVersions, getVersion, seedMissing, restoreAll };
+        })();
+
+        // ============================================================
         // 主题
         // ============================================================
         const Theme = (function() {
@@ -1326,6 +1408,15 @@
                     badge.className = 'badge';
                     badge.textContent = `${data.shortcuts.length} 个快捷键`;
                     titleEl.appendChild(badge);
+
+                    // 内置软件展示其数据对应的版本(来源与采集版本见 data/builtin-shortcuts.js 文件头)
+                    const version = Builtin.getVersion(softwareKey);
+                    if (version) {
+                        const verBadge = document.createElement('span');
+                        verBadge.className = 'badge version-badge';
+                        verBadge.textContent = version;
+                        titleEl.appendChild(verBadge);
+                    }
                 }
 
                 const addBtn = document.getElementById('addShortcutBtn');
@@ -2016,6 +2107,19 @@
             document.getElementById('addSoftwareDialogCancel').addEventListener('click', Actions.closeAddSoftwareDialog);
             document.getElementById('submitAddSoftware').addEventListener('click', Actions.addSoftware);
 
+            // 更新内置数据(强制用内置数据覆盖内置软件，保留自定义软件)
+            document.getElementById('restoreBuiltinBtn').addEventListener('click', async () => {
+                const count = Object.keys(Builtin.getData()).length;
+                if (!count) { Toast.error('未找到内置数据'); return; }
+                const ok = window.confirm(`将用内置数据覆盖这 ${count} 个内置软件的快捷键（你自己添加的软件不受影响）。\n如果修改过内置软件，这些修改会丢失，确定继续吗？`);
+                if (!ok) return;
+                const done = await Builtin.restoreAll();
+                UI.populateSoftwareList();
+                const current = UI.getCurrentSoftware();
+                if (current) UI.selectSoftware(current);
+                Toast.success(`已更新 ${done.length} 个内置软件`);
+            });
+
             // 删除对话框
             document.getElementById('deleteDialogClose').addEventListener('click', UI.closeDeleteDialog);
             document.getElementById('deleteDialogCancel').addEventListener('click', UI.closeDeleteDialog);
@@ -2057,10 +2161,17 @@
         function init() {
             Theme.apply();
             setupEventListeners();
-            UI.populateSoftwareList();
 
             if (typeof utools === 'undefined' || !utools.onPluginEnter) {
-                // 非 uTools 环境(开发/调试)
+                // 非 uTools 环境(开发/调试)：把内置数据注入内存态以便直接预览
+                const data = Builtin.getData();
+                Object.keys(data).forEach(key => {
+                    Store.setLocal(key, {
+                        name: data[key].name,
+                        shortcuts: JSON.parse(JSON.stringify(data[key].shortcuts))
+                    });
+                });
+                UI.populateSoftwareList();
                 const first = document.querySelector('.software-item');
                 if (first) UI.selectSoftware(first.dataset.value);
                 else UI.showEmpty();
@@ -2069,7 +2180,9 @@
 
             utools.onPluginEnter(({ code, type, payload }) => {
                 Theme.apply();
-                Store.loadAll().then(() => {
+                Store.loadAll().then(async () => {
+                    // 首次运行：补齐缺失的内置软件（已有条目保留，不覆盖用户修改）
+                    await Builtin.seedMissing();
                     UI.populateSoftwareList();
                     const mapping = (window.sukeyApi && window.sukeyApi.loadSoftwareMapping)
                         ? window.sukeyApi.loadSoftwareMapping() : { softwareMapping: {} };
