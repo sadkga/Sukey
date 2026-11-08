@@ -966,6 +966,10 @@
         // KeyMap — 物理按键与显示名互转(纯函数)
         // ============================================================
         const KeyMap = {
+            // 组合键文本分隔符: "+" 本身也是合法按键,必须用带空格的 " + "
+            // 连接各按键,才能与作为按键的 "+" 区分开(如 "Ctrl + +")
+            SEPARATOR: ' + ',
+
             toDisplay(key, code) {
                 if (key === 'Control') return 'Ctrl';
                 if (key === 'Alt') return 'Alt';
@@ -977,13 +981,25 @@
                 if (code === 'Backspace') return 'Backspace';
                 if (code === 'Tab') return 'Tab';
                 if (typeof code === 'string' && code.startsWith('Arrow')) return code.slice(5);
+                // "+" 键(Shift+= 或数字小键盘 +):按物理键位统一识别为 "+",
+                // 避免部分键盘布局下 key 不是 "+" 时被当成未知键丢弃
+                if (code === 'Equal' && key === '+') return '+';
+                if (code === 'NumpadAdd') return '+';
                 if (typeof key === 'string' && key.length === 1) return key.toUpperCase();
                 if (typeof key === 'string' && key.startsWith('F') && key.length <= 4) return key;
                 return null;
             },
 
-            normalize(keyStr) {
-                if (typeof keyStr !== 'string' || !keyStr) return '';
+            // 解析组合键文本为按键数组(如 "Ctrl + +" -> ["Ctrl","+"])
+            // 兼容旧的无空格写法 "Ctrl+Shift+P"
+            parse(keyStr) {
+                if (typeof keyStr !== 'string') return [];
+                const raw = keyStr.trim();
+                if (!raw) return [];
+                // 单独的 "+" 键
+                const parts = raw === '+'
+                    ? ['+']
+                    : (raw.includes(KeyMap.SEPARATOR) ? raw.split(KeyMap.SEPARATOR) : raw.split('+'));
                 const alias = {
                     ctrl: 'Ctrl', control: 'Ctrl',
                     alt: 'Alt',
@@ -996,8 +1012,7 @@
                     backspace: 'Backspace',
                     up: 'Up', down: 'Down', left: 'Left', right: 'Right'
                 };
-                return keyStr
-                    .split('+')
+                return parts
                     .map(k => {
                         const trimmed = k.trim();
                         if (!trimmed) return null;
@@ -1007,13 +1022,19 @@
                         if (/^f\d+$/i.test(trimmed)) return trimmed.toUpperCase();
                         return trimmed;
                     })
-                    .filter(Boolean)
-                    .join('+');
+                    .filter(Boolean);
+            },
+
+            // 将按键数组格式化为可显示/可编辑的文本
+            format(keys) {
+                if (!Array.isArray(keys)) return '';
+                return keys.filter(k => k != null && k !== '').join(KeyMap.SEPARATOR);
             },
 
             toMatchString(keys) {
                 if (!Array.isArray(keys)) return '';
-                return keys.map(k => String(k).toLowerCase()).join('+');
+                // 用不可见分隔符,避免与作为按键的 "+" 冲突
+                return keys.map(k => String(k).toLowerCase()).join('\u001f');
             }
         };
 
@@ -1336,7 +1357,9 @@
                     filtered = filtered.filter(s => {
                         const commandMatch = (s.command || '').toLowerCase().includes(kw);
                         const descMatch = (s.description || '').toLowerCase().includes(kw);
-                        const keysMatch = (Array.isArray(s.keys) ? s.keys.join('+') : '').toLowerCase().includes(kw);
+                        const keysMatch = (Array.isArray(s.keys)
+                            ? (KeyMap.format(s.keys) + '|' + s.keys.join('+'))
+                            : '').toLowerCase().includes(kw);
                         const catMatch = (s.category || '').toLowerCase().includes(kw);
                         return commandMatch || descMatch || keysMatch || catMatch;
                     });
@@ -1390,7 +1413,7 @@
                     let groupHtml = `<div class="category-group">
                         <div class="category-header">${safeCat}</div>`;
                     grouped[category].forEach((s) => {
-                        const safeKeys = Html.escape((Array.isArray(s.keys) ? s.keys : []).join('+'));
+                        const safeKeys = Html.escape(KeyMap.format(Array.isArray(s.keys) ? s.keys : []));
                         const safeCmd = Html.escape(s.command || '');
                         const safeDesc = Html.escape(s.description || '');
                         // 数字索引可直接嵌入,key 用 escape 后即使含特殊字符也安全
@@ -1544,17 +1567,19 @@
                     recordedKeys.push(display);
                 }
                 const input = document.getElementById('editKeys');
-                if (input) input.value = recordedKeys.join('+');
+                if (input) input.value = KeyMap.format(recordedKeys);
                 return true;
             }
 
+            // 处理输入框手输:录制状态忽略;否则整体规范化为 "Ctrl + Shift + P".
+            // 不能在 "input" 事件里逐字重排,否则会把用户正在输入的 " + " 分隔符吃掉;
+            // 由 blur / 保存时调用。
             function handleEditKeysInput(input) {
-                if (isRecording) return;
+                if (!input) input = document.getElementById('editKeys');
+                if (!input || isRecording) return;
                 if (!input.value) return;
-                const parts = input.value.split('+');
-                if (parts.length > 1 || input.value.endsWith('+')) {
-                    input.value = KeyMap.normalize(input.value);
-                }
+                const keys = KeyMap.parse(input.value);
+                if (keys.length) input.value = KeyMap.format(keys);
             }
 
             return { start, stop, toggle, isActive, handleEditKeysKeydown, handleEditKeysInput };
@@ -1618,14 +1643,14 @@
                 if (match) {
                     scrollToShortcut(match);
                     if (hintEl) {
-                        hintEl.textContent = `✅ ${match.keys.join('+')} → ${match.command}`;
+                        hintEl.textContent = `✅ ${KeyMap.format(match.keys)} → ${match.command}`;
                         setTimeout(() => {
                             if (hintEl) hintEl.textContent = '💡 直接按下快捷键可跳转到对应记录';
                         }, 2000);
                     }
                 } else {
                     if (hintEl) {
-                        hintEl.textContent = `❌ 未找到: ${keys.join('+')}`;
+                        hintEl.textContent = `❌ 未找到: ${KeyMap.format(keys)}`;
                         setTimeout(() => {
                             if (hintEl) hintEl.textContent = '💡 直接按下快捷键可跳转到对应记录';
                         }, 2000);
@@ -1642,7 +1667,7 @@
                     const keysEl = item.querySelector('.keys');
                     const commandEl = item.querySelector('.command');
                     if (keysEl && commandEl) {
-                        if (keysEl.textContent.toLowerCase() === target.keys.join('+').toLowerCase() &&
+                        if (keysEl.textContent.toLowerCase() === KeyMap.format(target.keys).toLowerCase() &&
                             commandEl.textContent === target.command) {
                             item.classList.add('highlight');
                             item.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1696,7 +1721,7 @@
                 Recorder.stop();
                 const dialog = document.getElementById('editDialog');
                 if (!dialog) return;
-                document.getElementById('editKeys').value = (shortcut.keys || []).join('+');
+                document.getElementById('editKeys').value = KeyMap.format(shortcut.keys || []);
                 document.getElementById('editCommand').value = shortcut.command || '';
                 document.getElementById('editCategory').value = shortcut.category || '';
                 document.getElementById('editDescription').value = shortcut.description || '';
@@ -1743,7 +1768,7 @@
                 if (!data) { Toast.error('数据已被删除,请刷新'); return; }
 
                 const newShortcut = {
-                    keys: newKeys.split('+').map(k => k.trim()).filter(Boolean),
+                    keys: KeyMap.parse(newKeys),
                     command: newCommand,
                     category: newCategory || '常用',
                     description: newDesc
@@ -2017,7 +2042,8 @@
             editKeysInput.addEventListener('keydown', (e) => {
                 Recorder.handleEditKeysKeydown(e);
             });
-            editKeysInput.addEventListener('input', () => {
+            // 手输规范化放到 blur(逐字 input 重排会吞掉 " + " 分隔符)
+            editKeysInput.addEventListener('blur', () => {
                 Recorder.handleEditKeysInput(editKeysInput);
             });
 
