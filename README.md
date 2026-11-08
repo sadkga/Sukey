@@ -138,7 +138,7 @@ const shortcutsData = {
 ## 开发调试
 
 1. 在 uTools 中安装「uTools 开发者工具」插件
-2. 打开开发者工具，选择 `D:\material\OneDrive\material\Sukey` 文件夹
+2. 打开开发者工具，选择 Sukey 插件项目所在的文件夹
 3. 在搜索框输入 `sk` 或 `快捷键` 启动插件
 4. 按 `F12` 打开开发者工具进行调试
 5. 修改代码后按 `Ctrl+Shift+P` 重新加载
