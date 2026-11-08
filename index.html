@@ -1250,10 +1250,15 @@
         // Builtin — 内置快捷键数据(来自 data/builtin-shortcuts.js)
         // ============================================================
         // 首次运行时把内置数据写入 uTools 数据库(custom_<key>)。
-        // 内置数据本身是普通可编辑条目，故默认遵循"已有则保留"：
-        // 只补齐缺失的软件，不覆盖用户已修改的内容；
-        // 需要恢复默认时由「更新内置数据」按钮强制覆盖。
+        // 采用"只播种一次"策略：用 utools.db 中的一个 meta 文档记录是否已播种，
+        // 这样用户删除某个内置软件后不会在下次启动时被重新加回来
+        // (符合帮助说明"内置软件可删除，通过「更新内置数据」恢复")。
+        // 播种时只补齐缺失的软件，不覆盖用户已修改的内置软件。
         const Builtin = (function() {
+            // 提升此版本号可让旧用户重新补齐新增的内置软件(但不覆盖已有条目)
+            const SEED_VERSION = '2026-11-08-1';
+            const META_ID = 'sukey_meta';
+
             function getData() {
                 const b = (typeof window !== 'undefined' && window.SukeyBuiltin) || null;
                 return (b && b.data) ? b.data : {};
@@ -1272,6 +1277,32 @@
                 return JSON.parse(JSON.stringify(data));
             }
 
+            function hasUtoolsDb() {
+                return typeof utools !== 'undefined' && utools.db && typeof utools.db.get === 'function';
+            }
+
+            async function isSeeded() {
+                if (!hasUtoolsDb()) return false;
+                try {
+                    const doc = await utools.db.get(META_ID);
+                    return !!(doc && doc.seedVersion === SEED_VERSION);
+                } catch (e) {
+                    return false;
+                }
+            }
+
+            async function markSeeded() {
+                if (!hasUtoolsDb()) return;
+                try {
+                    const doc = await utools.db.get(META_ID);
+                    const payload = { _id: META_ID, seedVersion: SEED_VERSION };
+                    if (doc && doc._rev) payload._rev = doc._rev;
+                    await utools.db.put(payload);
+                } catch (e) {
+                    // silent fail
+                }
+            }
+
             // 把缺失的内置软件写入数据库；返回新增的 key 数组
             async function seedMissing() {
                 const data = getData();
@@ -1286,6 +1317,14 @@
                 return added;
             }
 
+            // 首次(或版本变化)时补齐缺失内置软件；之后不再自动补，避免恢复被删除的内置软件
+            async function ensureSeeded() {
+                if (await isSeeded()) return [];
+                const added = await seedMissing();
+                await markSeeded();
+                return added;
+            }
+
             // 用内置数据强制覆盖所有内置软件(保留用户自定义的其他软件)；返回覆盖的 key 数组
             async function restoreAll() {
                 const data = getData();
@@ -1296,10 +1335,11 @@
                     const ok = await Store.save(key, entry);
                     if (ok) done.push(key);
                 }
+                await markSeeded();
                 return done;
             }
 
-            return { getData, getVersions, getVersion, seedMissing, restoreAll };
+            return { getData, getVersions, getVersion, seedMissing, ensureSeeded, restoreAll };
         })();
 
         // ============================================================
@@ -2181,8 +2221,9 @@
             utools.onPluginEnter(({ code, type, payload }) => {
                 Theme.apply();
                 Store.loadAll().then(async () => {
-                    // 首次运行：补齐缺失的内置软件（已有条目保留，不覆盖用户修改）
-                    await Builtin.seedMissing();
+                    // 首次运行(或内置数据版本变化)：补齐缺失的内置软件
+                    // 只播种一次，之后再启动不会把用户删除的内置软件加回来
+                    await Builtin.ensureSeeded();
                     UI.populateSoftwareList();
                     const mapping = (window.sukeyApi && window.sukeyApi.loadSoftwareMapping)
                         ? window.sukeyApi.loadSoftwareMapping() : { softwareMapping: {} };
