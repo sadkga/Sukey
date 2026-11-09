@@ -89,6 +89,9 @@
             flex: 1;
             display: flex;
             overflow: hidden;
+            /* 显式铺满主题底色：否则 .content/.shortcut-list 透明，
+               会透出 webview 底层(深色)，导致浅色主题下快捷键详情面板变深色 */
+            background: var(--bg-dark);
         }
 
         /* Sidebar */

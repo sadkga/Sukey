@@ -187,6 +187,7 @@ Sukey 通过 uTools MCP 服务向 AI Agent 暴露以下工具（在 `plugin.json
 ### 2026-11-09
 - 新增 uTools MCP 工具：`list_software`、`get_shortcuts`、`search_shortcuts`、`import_shortcuts`、`export_backup`、`import_backup`，可被 AI Agent 调用完成快捷键导入与数据备份导出
 - 修复「使用说明」弹层在浅色主题下仍显示深色背景的问题（背景改为随主题变化）
+- 修复浅色主题下快捷键详情面板背景变深色的问题：为 `.main-container` 显式铺主题底色，避免内容区透明时透出深色底层
 - 软件过多时，在侧栏「软件」标题旁新增 🔍 搜索按钮：点击展开搜索框，输入关键词过滤软件列表，回车（或点击匹配项）进入对应软件
 
 ### 2026-11-08
