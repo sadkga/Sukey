@@ -104,7 +104,11 @@
         }
 
         .sidebar-header {
-            padding: 12px;
+            /* 保持与原版同高 38px（原为 12px 内边距 + 单行标题），
+               避免因新增搜索按钮使标题区变高、把软件列表整体下移 */
+            padding: 0 12px;
+            height: 38px;
+            box-sizing: border-box;
             font-size: 11px;
             text-transform: uppercase;
             color: var(--text-secondary);
@@ -116,6 +120,7 @@
 
         .sidebar-header .sidebar-title {
             flex: 1;
+            line-height: 20px;
         }
 
         /* 「软件」标题旁的搜索开关按钮 */
@@ -124,14 +129,14 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 22px;
-            height: 22px;
+            width: 20px;
+            height: 20px;
             padding: 0;
             background: transparent;
             border: 1px solid transparent;
             border-radius: 4px;
             color: var(--text-secondary);
-            font-size: 12px;
+            font-size: 11px;
             line-height: 1;
             cursor: pointer;
             transition: background 0.15s, color 0.15s, border-color 0.15s;
@@ -232,13 +237,6 @@
             font-weight: bold;
             color: #fff;
             background: var(--text-secondary);
-        }
-
-        .software-item .software-name {
-            flex: 1;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
         }
 
         /* Content Area */
@@ -1524,8 +1522,7 @@
                     // 安全: name.charAt(0) 和 name 都走 escape
                     const safeName = Html.escape(name);
                     const safeInitial = Html.escape((name || '?').charAt(0));
-                    div.innerHTML = `<span class="icon">${safeInitial}</span>`
-                        + `<span class="software-name">${safeName}</span>`;
+                    div.innerHTML = `<span class="icon">${safeInitial}</span>${safeName}`;
                     div.addEventListener('click', () => selectSoftware(`custom_${key}`));
                     div.addEventListener('contextmenu', (e) => {
                         e.preventDefault();
