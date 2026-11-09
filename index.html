@@ -106,6 +106,92 @@
             text-transform: uppercase;
             color: var(--text-secondary);
             letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .sidebar-header .sidebar-title {
+            flex: 1;
+        }
+
+        /* 「软件」标题旁的搜索开关按钮 */
+        .sidebar-header .sidebar-search-btn {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            padding: 0;
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            color: var(--text-secondary);
+            font-size: 12px;
+            line-height: 1;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s, border-color 0.15s;
+        }
+
+        .sidebar-header .sidebar-search-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .sidebar-header .sidebar-search-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+
+        /* 软件搜索框（点击标题旁搜索按钮后展开） */
+        .sidebar-search {
+            padding: 0 12px 8px;
+        }
+
+        .sidebar-search.hidden {
+            display: none;
+        }
+
+        .sidebar-search-box {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 0 8px;
+        }
+
+        .sidebar-search-box:focus-within {
+            border-color: var(--accent);
+        }
+
+        .sidebar-search-box .icon {
+            color: var(--text-secondary);
+            font-size: 11px;
+        }
+
+        .sidebar-search-box input {
+            flex: 1;
+            width: 100%;
+            padding: 6px 0;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--text-primary);
+            font-size: 12px;
+        }
+
+        .sidebar-search-box input::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .software-list .software-empty {
+            padding: 12px;
+            font-size: 12px;
+            color: var(--text-secondary);
         }
 
         .software-list {
@@ -150,27 +236,6 @@
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
-        }
-
-        .software-item .software-search {
-            flex: 0 0 auto;
-            font-size: 12px;
-            line-height: 1;
-            padding: 2px 4px;
-            border-radius: 3px;
-            opacity: 0.45;
-            cursor: pointer;
-            transition: opacity 0.15s, background 0.15s;
-        }
-
-        .software-item:hover .software-search,
-        .software-item.active .software-search {
-            opacity: 0.9;
-        }
-
-        .software-item .software-search:hover {
-            opacity: 1;
-            background: var(--bg-active);
         }
 
         /* Content Area */
@@ -743,7 +808,14 @@
     <div class="main-container">
         <div class="sidebar">
             <div class="sidebar-header">
-                软件
+                <span class="sidebar-title">软件</span>
+                <button id="softwareSearchToggle" class="sidebar-search-btn" title="搜索软件并进入" aria-label="搜索软件">🔍</button>
+            </div>
+            <div class="sidebar-search hidden" id="softwareSearch">
+                <div class="sidebar-search-box">
+                    <span class="icon">🔍</span>
+                    <input type="text" id="softwareSearchInput" placeholder="搜索软件，回车进入..." autocomplete="off">
+                </div>
             </div>
             <div class="software-list" id="softwareList">
                 <!-- Populated by JS -->
@@ -1425,37 +1497,61 @@
             }
 
             // ---- 软件列表 ----
-            function populateSoftwareList() {
+            // filterText: 可选的软件名过滤关键词（来自侧栏软件搜索框）
+            function populateSoftwareList(filterText) {
                 const list = document.getElementById('softwareList');
                 if (!list) return;
                 const frag = document.createDocumentFragment();
+                const kw = (filterText && String(filterText).trim()) ? String(filterText).trim().toLowerCase() : '';
+                let shown = 0;
                 Object.keys(Store.getAll()).forEach(key => {
                     const data = Store.get(key);
                     if (!data) return;
+                    const name = data.name || key;
+                    if (kw && !(String(name).toLowerCase().includes(kw) || String(key).toLowerCase().includes(kw))) {
+                        return;
+                    }
+                    shown++;
                     const div = document.createElement('div');
                     div.className = `software-item ${key}`;
                     div.dataset.value = `custom_${key}`;
-                    // 安全: name.charAt(0) 和 name 都走 escape
-                    const safeName = Html.escape(data.name);
-                    const safeInitial = Html.escape((data.name || '?').charAt(0));
-                    div.innerHTML = `<span class="icon">${safeInitial}</span>`
-                        + `<span class="software-name">${safeName}</span>`
-                        + `<span class="software-search" title="搜索该软件快捷键">🔍</span>`;
-                    div.addEventListener('click', () => selectSoftware(`custom_${key}`));
-                    const searchIcon = div.querySelector('.software-search');
-                    if (searchIcon) {
-                        searchIcon.addEventListener('click', (e) => {
-                            e.stopPropagation();
-                            searchInSoftware(`custom_${key}`);
-                        });
+                    if (currentSoftware && `custom_${key}` === currentSoftware) {
+                        div.classList.add('active');
                     }
+                    // 安全: name.charAt(0) 和 name 都走 escape
+                    const safeName = Html.escape(name);
+                    const safeInitial = Html.escape((name || '?').charAt(0));
+                    div.innerHTML = `<span class="icon">${safeInitial}</span>`
+                        + `<span class="software-name">${safeName}</span>`;
+                    div.addEventListener('click', () => selectSoftware(`custom_${key}`));
                     div.addEventListener('contextmenu', (e) => {
                         e.preventDefault();
                         showDeleteDialog(key, data.name);
                     });
                     frag.appendChild(div);
                 });
+                if (kw && shown === 0) {
+                    const empty = document.createElement('div');
+                    empty.className = 'software-empty';
+                    empty.textContent = '没有匹配的软件';
+                    frag.appendChild(empty);
+                }
                 list.replaceChildren(frag);
+            }
+
+            // ---- 软件搜索：返回首个匹配项并进入 ----
+            // 匹配顺序：显示名/键完全一致 -> 以关键词开头 -> 包含关键词
+            function findSoftwareByKeyword(keyword) {
+                const kw = (keyword && String(keyword).trim()) ? String(keyword).trim().toLowerCase() : '';
+                if (!kw) return null;
+                const all = Store.getAll();
+                const keys = Object.keys(all);
+                const exact = keys.find(k => k.toLowerCase() === kw || String((all[k] && all[k].name) || '').toLowerCase() === kw);
+                if (exact) return `custom_${exact}`;
+                const startsWith = keys.find(k => k.toLowerCase().startsWith(kw) || String((all[k] && all[k].name) || '').toLowerCase().startsWith(kw));
+                if (startsWith) return `custom_${startsWith}`;
+                const includes = keys.find(k => k.toLowerCase().includes(kw) || String((all[k] && all[k].name) || '').toLowerCase().includes(kw));
+                return includes ? `custom_${includes}` : null;
             }
 
             // ---- 选择软件 ----
@@ -1508,16 +1604,6 @@
 
                 populateCategorySelect(data.shortcuts);
                 renderShortcuts(data.shortcuts);
-            }
-
-            // ---- 选中软件后聚焦搜索框，便于直接搜索该软件的快捷键 ----
-            function searchInSoftware(software) {
-                selectSoftware(software);
-                const searchInput = document.getElementById('searchInput');
-                if (searchInput) {
-                    searchInput.focus();
-                    searchInput.select();
-                }
             }
 
             // ---- 填充分类选择(用 DocumentFragment,O(n) 而非 O(n²)) ----
@@ -1674,7 +1760,7 @@
             return {
                 populateSoftwareList,
                 selectSoftware,
-                searchInSoftware,
+                findSoftwareByKeyword,
                 populateCategorySelect,
                 filterShortcuts,
                 renderShortcuts,
@@ -2387,6 +2473,51 @@
         function setupEventListeners() {
             // 主题
             document.getElementById('themeToggle').addEventListener('click', () => Theme.toggle());
+
+            // 软件搜索(标题旁按钮展开，过滤列表并回车进入)
+            const softwareSearchToggle = document.getElementById('softwareSearchToggle');
+            const softwareSearch = document.getElementById('softwareSearch');
+            const softwareSearchInput = document.getElementById('softwareSearchInput');
+            function setSoftwareSearchOpen(open) {
+                if (!softwareSearch || !softwareSearchToggle) return;
+                softwareSearch.classList.toggle('hidden', !open);
+                softwareSearchToggle.classList.toggle('active', open);
+                if (open) {
+                    if (softwareSearchInput) {
+                        softwareSearchInput.focus();
+                        softwareSearchInput.select();
+                    }
+                } else if (softwareSearchInput) {
+                    softwareSearchInput.value = '';
+                    UI.populateSoftwareList('');
+                }
+            }
+            if (softwareSearchToggle) {
+                softwareSearchToggle.addEventListener('click', () => {
+                    setSoftwareSearchOpen(softwareSearch.classList.contains('hidden'));
+                });
+            }
+            if (softwareSearchInput) {
+                softwareSearchInput.addEventListener('input', (e) => {
+                    UI.populateSoftwareList(e.target.value);
+                });
+                softwareSearchInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const target = UI.findSoftwareByKeyword(softwareSearchInput.value);
+                        if (target) {
+                            // 先关闭搜索框并恢复完整列表，再进入目标软件(否则会被随后的列表重建清掉选中态)
+                            setSoftwareSearchOpen(false);
+                            UI.selectSoftware(target);
+                        } else {
+                            Toast.error('没有找到匹配的软件');
+                        }
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        setSoftwareSearchOpen(false);
+                    }
+                });
+            }
 
             // 搜索 + 分类(带 debounce)
             const searchInput = document.getElementById('searchInput');

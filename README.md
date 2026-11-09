@@ -187,7 +187,7 @@ Sukey 通过 uTools MCP 服务向 AI Agent 暴露以下工具（在 `plugin.json
 ### 2026-11-09
 - 新增 uTools MCP 工具：`list_software`、`get_shortcuts`、`search_shortcuts`、`import_shortcuts`、`export_backup`、`import_backup`，可被 AI Agent 调用完成快捷键导入与数据备份导出
 - 修复「使用说明」弹层在浅色主题下仍显示深色背景的问题（背景改为随主题变化）
-- 软件列表每个软件项新增 🔍 搜索图标，点击即选中该软件并把焦点移到关键词搜索框，直接过滤该软件快捷键
+- 软件过多时，在侧栏「软件」标题旁新增 🔍 搜索按钮：点击展开搜索框，输入关键词过滤软件列表，回车（或点击匹配项）进入对应软件
 
 ### 2026-11-08
 - 扩充内置快捷键：新增 Office（Word/Excel/PowerPoint/Outlook）、Edge、Firefox、Obsidian、Photoshop 等
