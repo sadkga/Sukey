@@ -52,5 +52,202 @@
     "pluginSetting": {
         "width": 1366,
         "height": 600
+    },
+    "tools": {
+        "list_software": {
+            "description": "列出 Sukey 中已有的全部软件及其快捷键条数，可用于了解有哪些软件可查询或编辑。",
+            "inputSchema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {}
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "software": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "key": { "type": "string" },
+                                "name": { "type": "string" },
+                                "count": { "type": "integer" }
+                            },
+                            "required": ["key", "name", "count"]
+                        }
+                    }
+                },
+                "required": ["software"]
+            }
+        },
+        "get_shortcuts": {
+            "description": "获取某个软件的全部快捷键列表。software 可以是软件标识（key）或软件显示名称（精确匹配，不区分大小写）。",
+            "inputSchema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "software": {
+                        "type": "string",
+                        "description": "软件标识（如 vscode、chrome）或软件显示名称（如 Visual Studio Code）"
+                    }
+                },
+                "required": ["software"]
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "software": { "type": "string" },
+                    "name": { "type": "string" },
+                    "shortcuts": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "keys": { "type": "array", "items": { "type": "string" } },
+                                "command": { "type": "string" },
+                                "category": { "type": "string" },
+                                "description": { "type": "string" }
+                            },
+                            "required": ["keys", "command"]
+                        }
+                    }
+                },
+                "required": ["software", "shortcuts"]
+            }
+        },
+        "search_shortcuts": {
+            "description": "在所有软件的快捷键中按关键词模糊搜索（匹配按键、命令、分类、描述，中英文均不区分大小写）。",
+            "inputSchema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "keyword": {
+                        "type": "string",
+                        "description": "搜索关键词"
+                    }
+                },
+                "required": ["keyword"]
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "keyword": { "type": "string" },
+                    "total": { "type": "integer" },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "software": { "type": "string" },
+                                "name": { "type": "string" },
+                                "keys": { "type": "array", "items": { "type": "string" } },
+                                "command": { "type": "string" },
+                                "category": { "type": "string" },
+                                "description": { "type": "string" }
+                            },
+                            "required": ["software", "keys", "command"]
+                        }
+                    }
+                },
+                "required": ["keyword", "total", "results"]
+            }
+        },
+        "import_shortcuts": {
+            "description": "导入一个软件的快捷键。software 为软件名称；shortcuts 为快捷键数组，每项含 keys（按键数组，如 [\"Ctrl\",\"Shift\",\"P\"]）、command（命令名，必填）、category（分类，可选）、description（描述，可选）。默认合并到已有软件（同名按键覆盖），overwrite 为 true 时整体替换该软件的全部快捷键。",
+            "inputSchema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "software": {
+                        "type": "string",
+                        "description": "软件名称，例如 Visual Studio Code"
+                    },
+                    "shortcuts": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                                "keys": {
+                                    "type": "array",
+                                    "minItems": 1,
+                                    "items": { "type": "string" }
+                                },
+                                "command": { "type": "string" },
+                                "category": { "type": "string" },
+                                "description": { "type": "string" }
+                            },
+                            "required": ["keys", "command"]
+                        }
+                    },
+                    "overwrite": {
+                        "type": "boolean",
+                        "description": "为 true 时用本次数据整体替换该软件的全部快捷键，默认 false（合并）"
+                    }
+                },
+                "required": ["software", "shortcuts"]
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "software": { "type": "string" },
+                    "name": { "type": "string" },
+                    "added": { "type": "integer" },
+                    "updated": { "type": "integer" },
+                    "total": { "type": "integer" }
+                },
+                "required": ["software", "total"]
+            }
+        },
+        "export_backup": {
+            "description": "把所有软件及快捷键数据导出为一个 JSON 备份文件。可选指定 filePath，未指定时保存到系统下载目录并自动命名。",
+            "inputSchema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "filePath": {
+                        "type": "string",
+                        "description": "备份文件的绝对路径（可选）。未提供时保存到下载目录"
+                    }
+                }
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "filePath": { "type": "string" },
+                    "softwareCount": { "type": "integer" },
+                    "shortcutCount": { "type": "integer" }
+                },
+                "required": ["filePath", "softwareCount", "shortcutCount"]
+            }
+        },
+        "import_backup": {
+            "description": "从 export_backup 生成的 JSON 备份文件恢复数据。默认合并（同名软件整体覆盖），overwrite 为 true 时先清空现有软件再导入。",
+            "inputSchema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "filePath": {
+                        "type": "string",
+                        "description": "备份文件的绝对路径"
+                    },
+                    "overwrite": {
+                        "type": "boolean",
+                        "description": "为 true 时先清空现有全部软件再导入，默认 false（合并）"
+                    }
+                },
+                "required": ["filePath"]
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "imported": { "type": "integer" },
+                    "softwareCount": { "type": "integer" },
+                    "shortcutCount": { "type": "integer" }
+                },
+                "required": ["softwareCount", "shortcutCount"]
+            }
+        }
     }
 }

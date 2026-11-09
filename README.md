@@ -139,6 +139,23 @@ const shortcutsData = {
 }
 ```
 
+## AI Agent / MCP 工具
+
+Sukey 通过 uTools MCP 服务向 AI Agent 暴露以下工具（在 `plugin.json` 的 `tools` 中声明，并由 `index.html` 中的 `utools.registerTool()` 注册）。在 uTools「设置 → AI 设置 → MCP 服务」开启本地 MCP 服务后，Claude Code、Codex 等 AI Agent 即可发现并调用。
+
+| 工具 | 说明 | 主要参数 |
+| --- | --- | --- |
+| `list_software` | 列出所有软件及快捷键条数 | 无 |
+| `get_shortcuts` | 获取某软件的全部快捷键 | `software`（软件标识或显示名称） |
+| `search_shortcuts` | 全局模糊搜索快捷键 | `keyword` |
+| `import_shortcuts` | 导入某软件的快捷键 | `software`、`shortcuts`（`keys`/`command`/`category`/`description`）、`overwrite`（可选） |
+| `export_backup` | 导出全部数据为 JSON 备份 | `filePath`（可选，默认下载目录） |
+| `import_backup` | 从备份文件恢复数据 | `filePath`、`overwrite`（可选） |
+
+- `import_shortcuts` 默认按「按键组合」合并到已有软件（同名覆盖），`overwrite: true` 时整体替换该软件。
+- `import_backup` 默认合并（同名软件整体覆盖），`overwrite: true` 时先清空现有软件再导入。
+- 备份文件路径默认写入系统下载目录并自动命名；文件读写由 `preload.js` 暴露的 `sukeyApi.saveTextFile` / `sukeyApi.readTextFile` 负责。
+
 ## 使用说明
 
 ### 方式一：窗口匹配进入
@@ -166,6 +183,11 @@ const shortcutsData = {
 5. 修改代码后按 `Ctrl+Shift+P` 重新加载
 
 ## 更新日志
+
+### 2026-11-09
+- 新增 uTools MCP 工具：`list_software`、`get_shortcuts`、`search_shortcuts`、`import_shortcuts`、`export_backup`、`import_backup`，可被 AI Agent 调用完成快捷键导入与数据备份导出
+- 修复「使用说明」弹层在浅色主题下仍显示深色背景的问题（背景改为随主题变化）
+- 软件列表每个软件项新增 🔍 搜索图标，点击即选中该软件并把焦点移到关键词搜索框，直接过滤该软件快捷键
 
 ### 2026-11-08
 - 扩充内置快捷键：新增 Office（Word/Excel/PowerPoint/Outlook）、Edge、Firefox、Obsidian、Photoshop 等

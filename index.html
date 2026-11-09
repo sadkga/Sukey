@@ -27,6 +27,8 @@
             --font-mono: 'Cascadia Code', 'Fira Code', Consolas, 'SF Mono', monospace;
             --danger: #f44336;
             --danger-hover: #d32f2f;
+            --tooltip-bg: rgba(37, 37, 37, 0.75);
+            --tooltip-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
         }
 
         [data-theme="light"] {
@@ -41,6 +43,8 @@
             --accent-hover: #106ebe;
             --keys-color: #0078d4;
             --keys-bg: #e8e8e8;
+            --tooltip-bg: rgba(255, 255, 255, 0.9);
+            --tooltip-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
         }
 
         body {
@@ -139,6 +143,34 @@
             font-weight: bold;
             color: #fff;
             background: var(--text-secondary);
+        }
+
+        .software-item .software-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .software-item .software-search {
+            flex: 0 0 auto;
+            font-size: 12px;
+            line-height: 1;
+            padding: 2px 4px;
+            border-radius: 3px;
+            opacity: 0.45;
+            cursor: pointer;
+            transition: opacity 0.15s, background 0.15s;
+        }
+
+        .software-item:hover .software-search,
+        .software-item.active .software-search {
+            opacity: 0.9;
+        }
+
+        .software-item .software-search:hover {
+            opacity: 1;
+            background: var(--bg-active);
         }
 
         /* Content Area */
@@ -694,7 +726,7 @@
         <span id="helpBtn" style="cursor: pointer; padding: 4px 8px; font-size: 12px; -webkit-app-region: no-drag;">？</span>
     </div>
 
-    <div id="helpTooltip" style="display: none; position: absolute; top: 35px; right: 12px; width: 280px; padding: 16px; background: rgba(37, 37, 37, 0.75); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; color: var(--text-primary); z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.2); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);">
+    <div id="helpTooltip" style="display: none; position: absolute; top: 35px; right: 12px; width: 280px; padding: 16px; background: var(--tooltip-bg); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; color: var(--text-primary); z-index: 100; box-shadow: var(--tooltip-shadow); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
             <strong>使用说明</strong>
             <button id="helpClose" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 18px; padding: 0; line-height: 1;">×</button>
@@ -1163,6 +1195,7 @@
         // ============================================================
         const Store = (function() {
             let customShortcuts = {};
+            let loaded = false;
             const locks = new Set();
 
             function docId(key) { return `custom_${key}`; }
@@ -1179,6 +1212,7 @@
                             }
                         });
                     }
+                    loaded = true;
                     return customShortcuts;
                 } catch (err) {
                     console.error('[Sukey] 加载自定义快捷键失败:', err);
@@ -1242,8 +1276,9 @@
             function getAll() { return customShortcuts; }
             function get(key) { return customShortcuts[key]; }
             function setLocal(key, data) { customShortcuts[key] = data; }
+            function isLoaded() { return loaded; }
 
-            return { loadAll, save, remove, getAll, get, setLocal };
+            return { loadAll, save, remove, getAll, get, setLocal, isLoaded };
         })();
 
         // ============================================================
@@ -1403,8 +1438,17 @@
                     // 安全: name.charAt(0) 和 name 都走 escape
                     const safeName = Html.escape(data.name);
                     const safeInitial = Html.escape((data.name || '?').charAt(0));
-                    div.innerHTML = `<span class="icon">${safeInitial}</span>${safeName}`;
+                    div.innerHTML = `<span class="icon">${safeInitial}</span>`
+                        + `<span class="software-name">${safeName}</span>`
+                        + `<span class="software-search" title="搜索该软件快捷键">🔍</span>`;
                     div.addEventListener('click', () => selectSoftware(`custom_${key}`));
+                    const searchIcon = div.querySelector('.software-search');
+                    if (searchIcon) {
+                        searchIcon.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            searchInSoftware(`custom_${key}`);
+                        });
+                    }
                     div.addEventListener('contextmenu', (e) => {
                         e.preventDefault();
                         showDeleteDialog(key, data.name);
@@ -1464,6 +1508,16 @@
 
                 populateCategorySelect(data.shortcuts);
                 renderShortcuts(data.shortcuts);
+            }
+
+            // ---- 选中软件后聚焦搜索框，便于直接搜索该软件的快捷键 ----
+            function searchInSoftware(software) {
+                selectSoftware(software);
+                const searchInput = document.getElementById('searchInput');
+                if (searchInput) {
+                    searchInput.focus();
+                    searchInput.select();
+                }
             }
 
             // ---- 填充分类选择(用 DocumentFragment,O(n) 而非 O(n²)) ----
@@ -1620,6 +1674,7 @@
             return {
                 populateSoftwareList,
                 selectSoftware,
+                searchInSoftware,
                 populateCategorySelect,
                 filterShortcuts,
                 renderShortcuts,
@@ -2052,6 +2107,253 @@
         })();
 
         // ============================================================
+        // Tools — 通过 uTools MCP / AI Agent 调用的能力
+        // 覆盖:列出软件 / 读取快捷键 / 搜索 / 导入快捷键 / 导出备份 / 导入备份
+        // 通过 utools.registerTool 注册，plugin.json tools 中声明同名工具
+        // ============================================================
+        const Tools = (function() {
+            const BACKUP_TYPE = 'sukey-backup';
+            const BACKUP_VERSION = 1;
+
+            function hasApi() {
+                return typeof window !== 'undefined' && window.sukeyApi &&
+                    typeof window.sukeyApi.saveTextFile === 'function' &&
+                    typeof window.sukeyApi.readTextFile === 'function';
+            }
+
+            // 工具可能在插件界面进入前被调用，确保数据库已加载并完成内置播种
+            async function ensureReady() {
+                if (!Store.isLoaded() && typeof utools !== 'undefined' && utools.db) {
+                    await Store.loadAll();
+                    await Builtin.ensureSeeded();
+                }
+            }
+
+            // 在软件列表中定位软件：先按 key(精确/小写)，再按显示名(精确,不区分大小写)
+            function resolveSoftware(keyOrName) {
+                if (keyOrName == null) return null;
+                const input = String(keyOrName).trim();
+                if (!input) return null;
+                const all = Store.getAll();
+                if (all[input]) return input;
+                const lower = input.toLowerCase();
+                for (const key of Object.keys(all)) {
+                    if (key.toLowerCase() === lower) return key;
+                }
+                for (const key of Object.keys(all)) {
+                    const name = (all[key] && all[key].name) ? String(all[key].name) : '';
+                    if (name.toLowerCase() === lower) return key;
+                }
+                return null;
+            }
+
+            function keyFromName(name) {
+                return String(name).trim().toLowerCase().replace(/\s+/g, '_');
+            }
+
+            function listSoftware() {
+                const all = Store.getAll();
+                return Object.keys(all).map(key => ({
+                    key,
+                    name: (all[key] && all[key].name) || key,
+                    count: Array.isArray(all[key] && all[key].shortcuts) ? all[key].shortcuts.length : 0
+                }));
+            }
+
+            function getShortcuts(params) {
+                const software = params && params.software;
+                const key = resolveSoftware(software);
+                if (!key) throw new Error(`未找到软件「${software == null ? '' : software}」`);
+                const data = Store.get(key);
+                const shortcuts = (data && Array.isArray(data.shortcuts)) ? data.shortcuts.map(s => ({
+                    keys: Array.isArray(s.keys) ? s.keys.slice() : [],
+                    command: s.command || '',
+                    category: s.category || '',
+                    description: s.description || ''
+                })) : [];
+                return { software: key, name: (data && data.name) || key, shortcuts };
+            }
+
+            function searchShortcuts(params) {
+                const raw = params && params.keyword;
+                const kw = String(raw == null ? '' : raw).toLowerCase().trim();
+                const all = Store.getAll();
+                const results = [];
+                Object.keys(all).forEach(key => {
+                    const data = all[key];
+                    if (!data || !Array.isArray(data.shortcuts)) return;
+                    data.shortcuts.forEach(s => {
+                        const haystack = [
+                            KeyMap.format(Array.isArray(s.keys) ? s.keys : []),
+                            Array.isArray(s.keys) ? s.keys.join('+') : '',
+                            s.command || '', s.category || '', s.description || ''
+                        ].join('|').toLowerCase();
+                        if (!kw || haystack.includes(kw)) {
+                            results.push({
+                                software: key,
+                                name: data.name || key,
+                                keys: Array.isArray(s.keys) ? s.keys.slice() : [],
+                                command: s.command || '',
+                                category: s.category || '',
+                                description: s.description || ''
+                            });
+                        }
+                    });
+                });
+                return { keyword: String(raw == null ? '' : raw), total: results.length, results };
+            }
+
+            async function importShortcuts(params) {
+                const software = params && params.software;
+                const shortcuts = params && params.shortcuts;
+                const overwrite = !!(params && params.overwrite);
+                if (typeof software !== 'string' || !software.trim()) {
+                    throw new Error('缺少 software（软件名称）');
+                }
+                if (!Array.isArray(shortcuts) || shortcuts.length === 0) {
+                    throw new Error('shortcuts 必须是非空数组');
+                }
+                shortcuts.forEach((s, i) => {
+                    if (!s || typeof s !== 'object' || Array.isArray(s)) throw new Error(`第 ${i + 1} 项不是对象`);
+                    if (!Array.isArray(s.keys) || s.keys.length === 0) throw new Error(`第 ${i + 1} 项 keys 缺失或为空`);
+                    if (typeof s.command !== 'string' || !s.command.trim()) throw new Error(`第 ${i + 1} 项 command 缺失`);
+                });
+                const name = software.trim();
+                const existingKey = resolveSoftware(name);
+                const key = existingKey || keyFromName(name);
+                if (!Validator.isValidSoftwareKey(key)) {
+                    throw new Error('软件名称不合法（可用字母/数字/下划线）');
+                }
+                const incoming = shortcuts.map(s => Validator.sanitizeShortcut(s));
+                const existing = Store.get(key);
+                let merged;
+                let added = 0;
+                let updated = 0;
+                if (overwrite || !existing || !Array.isArray(existing.shortcuts)) {
+                    merged = incoming.slice();
+                    added = merged.length;
+                } else {
+                    merged = existing.shortcuts.map(s => ({ ...s, keys: Array.isArray(s.keys) ? s.keys.slice() : [] }));
+                    const matchStr = (arr) => KeyMap.toMatchString(arr);
+                    incoming.forEach(s => {
+                        const idx = merged.findIndex(e => matchStr(e.keys) === matchStr(s.keys));
+                        if (idx >= 0) { merged[idx] = s; updated++; }
+                        else { merged.push(s); added++; }
+                    });
+                }
+                const newData = { name: (existing && existing.name) || name, shortcuts: merged };
+                Store.setLocal(key, newData);
+                const ok = await Store.save(key, newData);
+                if (!ok) throw new Error('保存失败');
+                if (document.getElementById('softwareList')) UI.populateSoftwareList();
+                return { software: key, name: newData.name, added, updated, total: merged.length };
+            }
+
+            function buildBackup() {
+                const all = Store.getAll();
+                const software = {};
+                let shortcutCount = 0;
+                Object.keys(all).forEach(key => {
+                    const data = all[key];
+                    if (!data) return;
+                    const shortcuts = Array.isArray(data.shortcuts) ? data.shortcuts : [];
+                    shortcutCount += shortcuts.length;
+                    software[key] = { name: data.name || key, shortcuts };
+                });
+                return {
+                    type: BACKUP_TYPE,
+                    version: BACKUP_VERSION,
+                    exportedAt: new Date().toISOString(),
+                    software,
+                    softwareCount: Object.keys(software).length,
+                    shortcutCount
+                };
+            }
+
+            function exportBackup(params) {
+                if (!hasApi()) throw new Error('文件导出能力不可用，请在 uTools 中运行');
+                const filePath = params && params.filePath;
+                const backup = buildBackup();
+                const saved = window.sukeyApi.saveTextFile(JSON.stringify(backup, null, 2), filePath, undefined);
+                if (!saved || !saved.ok) throw new Error((saved && saved.error) || '写入文件失败');
+                return {
+                    filePath: saved.filePath,
+                    softwareCount: backup.softwareCount,
+                    shortcutCount: backup.shortcutCount
+                };
+            }
+
+            async function importBackup(params) {
+                if (!hasApi()) throw new Error('文件读取能力不可用，请在 uTools 中运行');
+                const filePath = params && params.filePath;
+                const overwrite = !!(params && params.overwrite);
+                if (typeof filePath !== 'string' || !filePath.trim()) throw new Error('缺少 filePath（备份文件路径）');
+                const read = window.sukeyApi.readTextFile(filePath);
+                if (!read || !read.ok) throw new Error((read && read.error) || '读取文件失败');
+                let backup;
+                try { backup = JSON.parse(read.content); } catch (e) { throw new Error('备份不是有效 JSON: ' + e.message); }
+                const softwareMap = backup && backup.software;
+                if (!softwareMap || typeof softwareMap !== 'object' || Array.isArray(softwareMap)) {
+                    throw new Error('备份格式不正确：缺少 software 字段');
+                }
+                if (overwrite) {
+                    for (const k of Object.keys(Store.getAll())) {
+                        await Store.remove(k);
+                    }
+                }
+                let imported = 0;
+                let shortcutCount = 0;
+                for (const key of Object.keys(softwareMap)) {
+                    const entry = softwareMap[key] || {};
+                    if (!Validator.isValidSoftwareKey(key)) continue;
+                    const shortcuts = Array.isArray(entry.shortcuts)
+                        ? entry.shortcuts.map(s => Validator.sanitizeShortcut(s)) : [];
+                    const data = { name: entry.name || key, shortcuts };
+                    Store.setLocal(key, data);
+                    const ok = await Store.save(key, data);
+                    if (ok) { imported++; shortcutCount += shortcuts.length; }
+                }
+                if (document.getElementById('softwareList')) UI.populateSoftwareList();
+                return {
+                    imported,
+                    softwareCount: Object.keys(Store.getAll()).length,
+                    shortcutCount
+                };
+            }
+
+            // 注册所有工具；仅在 uTools 提供 registerTool 时生效
+            function register() {
+                if (typeof utools === 'undefined' || typeof utools.registerTool !== 'function') return;
+                utools.registerTool('list_software', async () => {
+                    await ensureReady();
+                    return { software: listSoftware() };
+                });
+                utools.registerTool('get_shortcuts', async (params) => {
+                    await ensureReady();
+                    return getShortcuts(params || {});
+                });
+                utools.registerTool('search_shortcuts', async (params) => {
+                    await ensureReady();
+                    return searchShortcuts(params || {});
+                });
+                utools.registerTool('import_shortcuts', async (params) => {
+                    await ensureReady();
+                    return importShortcuts(params || {});
+                });
+                utools.registerTool('export_backup', async (params) => {
+                    await ensureReady();
+                    return exportBackup(params || {});
+                });
+                utools.registerTool('import_backup', async (params) => {
+                    await ensureReady();
+                    return importBackup(params || {});
+                });
+            }
+
+            return { register, listSoftware, getShortcuts, searchShortcuts, importShortcuts, exportBackup, importBackup };
+        })();
+
+        // ============================================================
         // Debounce 工具
         // ============================================================
         function debounce(fn, ms) {
@@ -2202,6 +2504,13 @@
             Theme.apply();
             setupEventListeners();
 
+            // 注册 MCP / AI Agent 工具（需在插件运行即注册，供 uTools MCP Server 调用）
+            try {
+                Tools.register();
+            } catch (err) {
+                console.error('[Sukey] 注册工具失败:', err);
+            }
+
             if (typeof utools === 'undefined' || !utools.onPluginEnter) {
                 // 非 uTools 环境(开发/调试)：把内置数据注入内存态以便直接预览
                 const data = Builtin.getData();
@@ -2258,6 +2567,8 @@
         // ============================================================
         window.Sukey = {
             init,
+            // MCP / AI Agent 工具（供调试与测试直接调用）
+            Tools,
             // 纯函数镜像(供 dev 工具 inspect;不要用于热路径)
             pure: { KeyMap, Validator, Html }
         };
